@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Controller,
   Post,
@@ -11,6 +9,8 @@ import {
   ValidationPipe,
   UsePipes,
   BadRequestException,
+  UseGuards,
+  Query,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import {
@@ -18,23 +18,28 @@ import {
   horoscopeUploadConfig,
 } from '../../common/config/multer.config';
 import { MatrimonialAdsService } from './matrimonial-ads.service';
-import {
-  InitializeMatrimonialAdDto,
-  SavePhaseDataDto,
-} from '../../dto/matrimonial-ad.dto';
+import { SavePhaseDataDto } from '../../dto/matrimonial-ad.dto';
 import { ApiResponse } from '../../dto/common.dto';
+import { FirebaseAuthGuard } from '../../guards/firebase-auth.guard';
+import { OptionalFirebaseAuthGuard } from '../../guards/optional-firebase-auth.guard';
+import { User } from '../../decorators/user.decorator';
+import type { AuthenticatedUser } from '../../decorators/user.decorator';
+import { OptionalUser } from '../../decorators/optional-user.decorator';
 
 @Controller('matrimonial-ads')
+// @UseGuards(FirebaseAuthGuard)
 export class MatrimonialAdsController {
   constructor(private readonly matrimonialAdsService: MatrimonialAdsService) {}
 
   @Post('initialize')
+  @UseGuards(FirebaseAuthGuard)
   @UsePipes(new ValidationPipe({ transform: true }))
   async initializeMatrimonialAd(
-    @Body() initializeDto: InitializeMatrimonialAdDto,
+    @User() user: AuthenticatedUser,
   ): Promise<ApiResponse<any>> {
     const result = await this.matrimonialAdsService.initializeMatrimonialAd(
-      initializeDto.firebaseUserId,
+      user.uid,
+      user.phoneNumber ?? '',
     );
     return {
       success: true,
@@ -43,6 +48,7 @@ export class MatrimonialAdsController {
   }
 
   @Post(':adId/save-phase')
+  @UseGuards(FirebaseAuthGuard)
   @UsePipes(new ValidationPipe({ transform: true }))
   async savePhaseData(
     @Param('adId') adId: string,
@@ -51,7 +57,7 @@ export class MatrimonialAdsController {
     const result = await this.matrimonialAdsService.savePhaseData(
       adId,
       savePhaseDto.phase,
-      savePhaseDto.data,
+      savePhaseDto.data as Record<string, any>,
     );
     return {
       success: true,
@@ -60,6 +66,7 @@ export class MatrimonialAdsController {
   }
 
   @Post(':adId/photos')
+  @UseGuards(FirebaseAuthGuard)
   @UseInterceptors(FilesInterceptor('photos', 10, photoUploadConfig))
   async uploadPhotos(
     @Param('adId') adId: string,
@@ -80,6 +87,7 @@ export class MatrimonialAdsController {
   }
 
   @Post(':adId/horoscope')
+  @UseGuards(FirebaseAuthGuard)
   @UseInterceptors(FilesInterceptor('horoscope', 1, horoscopeUploadConfig))
   async uploadHoroscope(
     @Param('adId') adId: string,
@@ -102,11 +110,75 @@ export class MatrimonialAdsController {
     };
   }
 
-  @Get('status/:firebaseUserId')
+  @Get('status')
+  @UseGuards(FirebaseAuthGuard)
   async getAdStatus(
-    @Param('firebaseUserId') firebaseUserId: string,
+    @User() user: AuthenticatedUser,
   ): Promise<ApiResponse<any>> {
-    const result = await this.matrimonialAdsService.getAdStatus(firebaseUserId);
+    const result = await this.matrimonialAdsService.getAdStatus(user.uid);
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  @Get('list')
+  @UseGuards(OptionalFirebaseAuthGuard)
+  async getMatrimonialAds(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('minAge') minAge?: string,
+    @Query('maxAge') maxAge?: string,
+    @Query('type') type?: 'bride' | 'groom',
+    @Query('location') location?: string,
+    @Query('religion') religion?: string,
+    @Query('education') education?: string,
+    @Query('profession') profession?: string,
+    @Query('caste') caste?: string,
+    @Query('ethnicity') ethnicity?: string,
+    @Query('maritalStatus') maritalStatus?: string,
+    @Query('hasChildren') hasChildren?: string,
+    @Query('isDrinking') isDrinking?: string,
+    @Query('isSmoking') isSmoking?: string,
+    @Query('skinColor') skinColor?: string,
+    @OptionalUser() user?: AuthenticatedUser,
+  ): Promise<ApiResponse<any>> {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+
+    // Validate pagination parameters
+    if (pageNum < 1 || limitNum < 1 || limitNum > 100) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message:
+          'Invalid pagination parameters. Page must be >= 1, limit must be between 1 and 100',
+      });
+    }
+
+    // Build filters object
+    const filters = {
+      minAge: minAge ? parseInt(minAge, 10) : undefined,
+      maxAge: maxAge ? parseInt(maxAge, 10) : undefined,
+      type,
+      location,
+      religion,
+      education,
+      profession,
+      caste,
+      ethnicity,
+      maritalStatus,
+      hasChildren,
+      isDrinking: isDrinking ? isDrinking === 'true' : undefined,
+      isSmoking: isSmoking ? isSmoking === 'true' : undefined,
+      skinColor,
+    };
+
+    const result = await this.matrimonialAdsService.getMatrimonialAds(
+      pageNum,
+      limitNum,
+      filters,
+      user?.uid,
+    );
     return {
       success: true,
       data: result,
@@ -122,11 +194,10 @@ export class MatrimonialAdsController {
     };
   }
 
-  @Post('submit/:firebaseUserId')
-  async submitAd(
-    @Param('firebaseUserId') firebaseUserId: string,
-  ): Promise<ApiResponse<any>> {
-    const result = await this.matrimonialAdsService.submitAd(firebaseUserId);
+  @Post('submit')
+  @UseGuards(FirebaseAuthGuard)
+  async submitAd(@User() user: AuthenticatedUser): Promise<ApiResponse<any>> {
+    const result = await this.matrimonialAdsService.submitAd(user.uid);
     return {
       success: true,
       data: result,

@@ -7,10 +7,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MatrimonialAd } from '../../entities/matrimonial-ad.entity';
 import { Match } from '../../entities/match.entity';
-import { Interest } from '../../entities/interest.entity';
+import { InterestRequest } from '../../entities/interest-request.entity';
 import { User } from '../../entities/user.entity';
 import { AdPhoto } from '../../entities/ad-photo.entity';
 import { ErrorCodes } from '../../dto/common.dto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { calculateAge } from '../../utils/age.util';
 
 @Injectable()
 export class MatchesService {
@@ -19,12 +21,13 @@ export class MatchesService {
     private matrimonialAdRepository: Repository<MatrimonialAd>,
     @InjectRepository(Match)
     private matchRepository: Repository<Match>,
-    @InjectRepository(Interest)
-    private interestRepository: Repository<Interest>,
+    @InjectRepository(InterestRequest)
+    private interestRequestRepository: Repository<InterestRequest>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(AdPhoto)
     private adPhotoRepository: Repository<AdPhoto>,
+    private notificationsService: NotificationsService,
   ) {}
 
   async findMatches(adId: string, page: number = 1, limit: number = 20) {
@@ -71,11 +74,13 @@ export class MatchesService {
       .take(limit)
       .getMany();
 
-    // Get existing interests for this ad
-    const existingInterests = await this.interestRepository.find({
-      where: { userId: matrimonialAd.userId },
+    // Get existing interests sent by this user
+    const existingInterests = await this.interestRequestRepository.find({
+      where: { fromUserId: matrimonialAd.userId },
     });
-    const interestedAdIds = existingInterests.map((interest) => interest.adId);
+    const interestedAdIds = existingInterests.map(
+      (interest) => interest.toAdId,
+    );
 
     // Format matches with compatibility scores
     const matches = ads.map((ad) => {
@@ -91,7 +96,7 @@ export class MatchesService {
         adId: ad.id,
         userId: ad.userId,
         type: ad.type,
-        age: ad.age,
+        age: calculateAge(ad.birthday),
         profession: ad.profession,
         height: ad.height,
         location: ad.location,
@@ -118,10 +123,50 @@ export class MatchesService {
     };
   }
 
-  async expressInterest(userId: string, adId: string) {
+  async expressInterest(userId: string, adId: string, message?: string) {
+    // Check if ad exists and is active
+    const ad = await this.matrimonialAdRepository.findOne({
+      where: { id: adId },
+      relations: ['user'],
+    });
+
+    if (!ad) {
+      throw new NotFoundException({
+        code: ErrorCodes.AD_NOT_FOUND,
+        message: 'Ad not found',
+      });
+    }
+
+    if (ad.status !== 'active') {
+      throw new BadRequestException({
+        code: ErrorCodes.AD_NOT_ACTIVE,
+        message: 'Ad is not active',
+      });
+    }
+
+    // Check if user is trying to express interest in their own ad
+    if (ad.userId === userId) {
+      throw new BadRequestException({
+        code: ErrorCodes.CANNOT_EXPRESS_INTEREST_OWN_AD,
+        message: 'Cannot express interest in your own ad',
+      });
+    }
+
+    // Get the user's own ad
+    const userAd = await this.matrimonialAdRepository.findOne({
+      where: { userId },
+    });
+
+    if (!userAd) {
+      throw new BadRequestException({
+        code: ErrorCodes.AD_NOT_FOUND,
+        message: 'You must have an active matrimonial ad to express interest',
+      });
+    }
+
     // Check if interest already exists
-    const existingInterest = await this.interestRepository.findOne({
-      where: { userId, adId },
+    const existingInterest = await this.interestRequestRepository.findOne({
+      where: { fromUserId: userId, toAdId: adId },
     });
 
     if (existingInterest) {
@@ -131,38 +176,139 @@ export class MatchesService {
       });
     }
 
-    const interest = this.interestRepository.create({
-      userId,
-      adId,
+    // Create interest request
+    const interestRequest = this.interestRequestRepository.create({
+      fromUserId: userId,
+      toUserId: ad.userId,
+      fromAdId: userAd.id,
+      toAdId: adId,
       status: 'pending',
+      compatibilityScore: 0, // Will be calculated
+      porondamScore: 0, // Will be calculated
+      message: message || null,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
     });
 
-    const savedInterest = await this.interestRepository.save(interest);
+    const savedInterest =
+      await this.interestRequestRepository.save(interestRequest);
 
-    // TODO: Send notification to the ad owner
+    // Send notification to ad owner
+    await this.notificationsService.createNotification(
+      ad.userId,
+      'interest',
+      'New Interest Received',
+      `$Someone has expressed interest in your profile`,
+      {
+        interestId: savedInterest.id,
+        fromUserId: userId,
+        adId: adId,
+        message: message,
+      },
+    );
 
     return {
       interestId: savedInterest.id,
-      adId: savedInterest.adId,
+      adId: savedInterest.toAdId,
       status: savedInterest.status,
       createdAt: savedInterest.createdAt,
     };
   }
 
-  async respondToInterest(interestId: string, status: 'accepted' | 'rejected') {
-    const interest = await this.interestRepository.findOne({
-      where: { id: interestId },
-      relations: ['ad', 'user'],
+  async getReceivedInterests(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ) {
+    // Find user's ad
+    const userAd = await this.matrimonialAdRepository.findOne({
+      where: { userId },
     });
 
-    if (!interest) {
+    if (!userAd) {
       throw new NotFoundException({
-        code: ErrorCodes.INTEREST_NOT_FOUND,
-        message: 'Interest not found',
+        code: ErrorCodes.AD_NOT_FOUND,
+        message: 'User has no matrimonial ad',
       });
     }
 
-    await this.interestRepository.update(interestId, {
+    const query = this.interestRequestRepository
+      .createQueryBuilder('interestRequest')
+      .leftJoinAndSelect('interestRequest.fromUser', 'fromUser')
+      .leftJoinAndSelect('interestRequest.fromAd', 'fromAd')
+      .leftJoinAndSelect('fromAd.photos', 'photos')
+      .where('interestRequest.toAdId = :adId', { adId: userAd.id })
+      .orderBy('interestRequest.createdAt', 'DESC');
+
+    const total = await query.getCount();
+
+    const interests = await query
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    const formattedInterests = interests.map((interestRequest) => {
+      const profilePhoto = (
+        interestRequest.fromAd as MatrimonialAd
+      ).photos?.find((photo: any) => (photo as AdPhoto).isProfilePhoto) as
+        | AdPhoto
+        | undefined;
+
+      return {
+        interestId: interestRequest.id,
+        fromUser: {
+          id: (interestRequest.fromUser as User).id,
+          firebaseUserId: (interestRequest.fromUser as User).firebaseUserId,
+        },
+        ad: {
+          id: (interestRequest.fromAd as MatrimonialAd).id,
+          type: (interestRequest.fromAd as MatrimonialAd).type,
+          age: calculateAge((interestRequest.fromAd as MatrimonialAd).birthday),
+          profession: (interestRequest.fromAd as MatrimonialAd).profession,
+          location: (interestRequest.fromAd as MatrimonialAd).location,
+          profilePhoto: profilePhoto?.filePath,
+        },
+        message: interestRequest.message,
+        compatibilityScore: interestRequest.compatibilityScore,
+        porondamScore: interestRequest.porondamScore,
+        status: interestRequest.status,
+        createdAt: interestRequest.createdAt,
+        respondedAt: interestRequest.respondedAt,
+        expiresAt: interestRequest.expiresAt,
+      };
+    });
+
+    return {
+      interests: formattedInterests,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async respondToInterest(interestId: string, status: 'accepted' | 'rejected') {
+    const interestRequest = await this.interestRequestRepository.findOne({
+      where: { id: interestId },
+      relations: ['fromUser', 'toUser', 'fromAd', 'toAd'],
+    });
+
+    if (!interestRequest) {
+      throw new NotFoundException({
+        code: ErrorCodes.INTEREST_NOT_FOUND,
+        message: 'Interest request not found',
+      });
+    }
+
+    if (interestRequest.status !== 'pending') {
+      throw new BadRequestException({
+        code: ErrorCodes.INTEREST_ALREADY_RESPONDED,
+        message: 'Interest has already been responded to',
+      });
+    }
+
+    await this.interestRequestRepository.update(interestId, {
       status,
       respondedAt: new Date(),
     });
@@ -172,11 +318,11 @@ export class MatchesService {
     if (status === 'accepted') {
       // Create a match
       const match = this.matchRepository.create({
-        user1Id: interest.userId,
-        user2Id: (interest.ad as MatrimonialAd).userId,
-        ad1Id: interest.adId,
-        ad2Id: interest.adId,
-        compatibilityScore: 0, // Will be calculated
+        user1Id: interestRequest.fromUserId,
+        user2Id: interestRequest.toUserId,
+        ad1Id: interestRequest.fromAdId,
+        ad2Id: interestRequest.toAdId,
+        compatibilityScore: interestRequest.compatibilityScore,
         status: 'pending',
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       });
@@ -184,7 +330,29 @@ export class MatchesService {
       const savedMatch = await this.matchRepository.save(match);
       matchId = savedMatch.id;
 
-      // TODO: Send notification to both users
+      // Send notification to the user who expressed interest
+      await this.notificationsService.createNotification(
+        interestRequest.fromUserId,
+        'match',
+        'Interest Accepted!',
+        'Your interest has been accepted. You have a new match!',
+        {
+          matchId: savedMatch.id,
+          interestId: interestId,
+        },
+      );
+    } else {
+      // Send notification for rejection
+      await this.notificationsService.createNotification(
+        interestRequest.fromUserId,
+        'interest',
+        'Interest Response',
+        'Your interest was not accepted at this time.',
+        {
+          interestId: interestId,
+          status: 'rejected',
+        },
+      );
     }
 
     return {
@@ -234,8 +402,8 @@ export class MatchesService {
         matchId: match.id,
         otherUser: {
           userId: otherUser.id,
-          name: `${otherAd.type} - ${otherAd.age} years`, // You might want to add name field
-          age: otherAd.age,
+          name: `${otherAd.type} - ${calculateAge(otherAd.birthday)} years`, // You might want to add name field
+          age: calculateAge(otherAd.birthday),
           profession: otherAd.profession,
           location: otherAd.location,
           profilePhoto: null, // Get from photos

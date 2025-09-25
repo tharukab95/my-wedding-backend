@@ -39,7 +39,7 @@ export class InterestRequest {
   porondamScore: number;
 
   @Column({ type: 'text', nullable: true })
-  message: string;
+  message: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

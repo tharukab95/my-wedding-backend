@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
@@ -13,6 +13,8 @@ import { MatrimonialAdsModule } from './modules/matrimonial-ads/matrimonial-ads.
 import { MatchesModule } from './modules/matches/matches.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { UsersModule } from './modules/users/users.module';
+import { UserResolverService } from './services/user-resolver.service';
+import { UserResolverMiddleware } from './middleware/user-resolver.middleware';
 import * as entities from './entities';
 
 @Module({
@@ -38,6 +40,7 @@ import * as entities from './entities';
     AppService,
     DatabaseService,
     FirebaseService,
+    UserResolverService,
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
@@ -48,4 +51,8 @@ import * as entities from './entities';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(UserResolverMiddleware).forRoutes('*');
+  }
+}

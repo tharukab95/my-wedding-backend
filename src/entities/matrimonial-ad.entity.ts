@@ -15,7 +15,7 @@ export class MatrimonialAd {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ unique: true })
   userId: string;
 
   @Column({ type: 'int', default: 1 })
@@ -38,9 +38,6 @@ export class MatrimonialAd {
 
   @Column({ type: 'time', nullable: true })
   birthTime: string | null;
-
-  @Column({ type: 'int', nullable: true })
-  age: number | null;
 
   @Column({ type: 'varchar', nullable: true })
   profession: string | null;
@@ -75,6 +72,16 @@ export class MatrimonialAd {
 
   @Column({ type: 'json', nullable: true })
   hobbies: string[] | null;
+
+  // Additional Phase 2 fields
+  @Column({ type: 'varchar', nullable: true })
+  skinColor: string | null;
+
+  @Column({ default: false })
+  isDrinking: boolean;
+
+  @Column({ default: false })
+  isSmoking: boolean;
 
   // Phase 3: Family Info
   @Column({ type: 'varchar', nullable: true })
@@ -116,6 +123,13 @@ export class MatrimonialAd {
   @Column({ type: 'timestamp', nullable: true })
   expiresAt: Date;
 
+  // Boosted ads for premium placement
+  @Column({ default: false })
+  isBoosted: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  boostedAt: Date | null;
+
   // Relations
   @ManyToOne('User', 'matrimonialAds')
   @JoinColumn({ name: 'userId' })
@@ -133,8 +147,8 @@ export class MatrimonialAd {
   @OneToMany('Match', 'ad2')
   matchesAsAd2: any[];
 
-  @OneToMany('Interest', 'ad')
-  interests: any[];
+  @OneToMany('InterestRequest', 'toAd')
+  interestRequests: any[];
 
   @OneToOne('LookingForPreferences', 'matrimonialAd')
   lookingForPreferences: any;

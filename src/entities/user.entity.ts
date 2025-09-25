@@ -40,8 +40,11 @@ export class User {
   @OneToMany('Notification', 'user')
   notifications: any[];
 
-  @OneToMany('Interest', 'user')
-  interests: any[];
+  @OneToMany('InterestRequest', 'fromUser')
+  sentInterestRequests: any[];
+
+  @OneToMany('InterestRequest', 'toUser')
+  receivedInterestRequests: any[];
 
   @OneToMany('Message', 'sender')
   sentMessages: any[];
