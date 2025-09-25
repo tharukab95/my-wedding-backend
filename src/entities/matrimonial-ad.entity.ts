@@ -152,4 +152,7 @@ export class MatrimonialAd {
 
   @OneToOne('LookingForPreferences', 'matrimonialAd')
   lookingForPreferences: any;
+
+  @OneToMany('Payment', 'ad')
+  payments: any[];
 }

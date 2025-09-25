@@ -411,8 +411,12 @@ export class MatrimonialAdsService {
         completed: !!matrimonialAd.lookingForPreferences,
         hasData: !!matrimonialAd.lookingForPreferences,
       },
-      7: { completed: !!matrimonialAd.assets, hasData: !!matrimonialAd.assets },
+      // Phase 7 (assets) is not implemented yet, so we skip it
     };
+
+    const isSubmitted = !!matrimonialAd.submittedAt;
+    const isPaid = matrimonialAd.status === 'active';
+    const needsPayment = isSubmitted && !isPaid;
 
     return {
       adId: matrimonialAd.id,
@@ -421,6 +425,10 @@ export class MatrimonialAdsService {
       phases,
       createdAt: matrimonialAd.createdAt,
       updatedAt: matrimonialAd.updatedAt,
+      submittedAt: matrimonialAd.submittedAt,
+      isSubmitted,
+      isPaid,
+      needsPayment,
     };
   }
 
@@ -492,10 +500,18 @@ export class MatrimonialAdsService {
       });
     }
 
-    if (matrimonialAd.status !== 'draft') {
+    if (matrimonialAd.status === 'active') {
       throw new BadRequestException({
         code: ErrorCodes.AD_ALREADY_SUBMITTED,
-        message: 'Ad has already been submitted',
+        message: 'Ad has already been submitted and activated',
+      });
+    }
+
+    if (matrimonialAd.status === 'draft' && matrimonialAd.submittedAt) {
+      throw new BadRequestException({
+        code: ErrorCodes.AD_ALREADY_SUBMITTED,
+        message:
+          'Ad has already been submitted. Please complete payment to activate.',
       });
     }
 
@@ -514,21 +530,114 @@ export class MatrimonialAdsService {
     }
 
     const submittedAt = new Date();
-    const expiresAt = new Date(
-      submittedAt.getTime() + 90 * 24 * 60 * 60 * 1000,
-    ); // 90 days
 
+    // Keep ad in draft state until payment is successful
+    // Status will be updated to 'active' via webhook when payment is completed
     await this.matrimonialAdRepository.update(matrimonialAd.id, {
-      status: 'active',
+      status: 'draft', // Keep as draft until payment
       submittedAt,
-      expiresAt,
+      // Don't set expiresAt here - it will be set when payment is successful
     });
 
     return {
       adId: matrimonialAd.id,
-      status: 'active',
+      status: 'draft', // Return draft status
       submittedAt,
-      expiresAt,
+      message:
+        'Ad submitted successfully. Please complete payment to activate your ad.',
+    };
+  }
+
+  async isAdReadyForPayment(firebaseUserId: string): Promise<boolean> {
+    // Find user by firebaseUserId
+    const user = await this.userRepository.findOne({
+      where: { firebaseUserId },
+    });
+
+    if (!user) {
+      return false;
+    }
+
+    // Find user's matrimonial ad
+    const matrimonialAd = await this.matrimonialAdRepository.findOne({
+      where: { userId: user.id },
+      relations: ['photos', 'horoscope', 'lookingForPreferences'],
+    });
+
+    if (!matrimonialAd) {
+      return false;
+    }
+
+    // Check if ad is in draft state and has been submitted
+    if (matrimonialAd.status !== 'draft' || !matrimonialAd.submittedAt) {
+      return false;
+    }
+
+    // Check if all required phases are completed
+    // const requiredPhases = [1, 2, 3, 4, 5, 6]; // Skip phase 7 (assets) for now
+
+    const phase1Completed = !!matrimonialAd.advertiserType;
+    const phase2Completed = !!matrimonialAd.type;
+    const phase3Completed = !!matrimonialAd.fatherProfession;
+    const phase4Completed = matrimonialAd.photosCount > 0;
+    const phase5Completed = matrimonialAd.hasHoroscope;
+    const phase6Completed = !!matrimonialAd.lookingForPreferences;
+
+    return (
+      phase1Completed &&
+      phase2Completed &&
+      phase3Completed &&
+      phase4Completed &&
+      phase5Completed &&
+      phase6Completed
+    );
+  }
+
+  async getAdSubmissionStatus(firebaseUserId: string): Promise<{
+    isSubmitted: boolean;
+    isPaid: boolean;
+    needsPayment: boolean;
+    status: string;
+    submittedAt?: Date;
+  }> {
+    // Find user by firebaseUserId
+    const user = await this.userRepository.findOne({
+      where: { firebaseUserId },
+    });
+
+    if (!user) {
+      return {
+        isSubmitted: false,
+        isPaid: false,
+        needsPayment: false,
+        status: 'not_found',
+      };
+    }
+
+    // Find user's matrimonial ad
+    const matrimonialAd = await this.matrimonialAdRepository.findOne({
+      where: { userId: user.id },
+    });
+
+    if (!matrimonialAd) {
+      return {
+        isSubmitted: false,
+        isPaid: false,
+        needsPayment: false,
+        status: 'no_ad',
+      };
+    }
+
+    const isSubmitted = !!matrimonialAd.submittedAt;
+    const isPaid = matrimonialAd.status === 'active';
+    const needsPayment = isSubmitted && !isPaid;
+
+    return {
+      isSubmitted,
+      isPaid,
+      needsPayment,
+      status: matrimonialAd.status,
+      submittedAt: matrimonialAd.submittedAt,
     };
   }
 

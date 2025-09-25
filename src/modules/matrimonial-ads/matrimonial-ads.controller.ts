@@ -185,6 +185,34 @@ export class MatrimonialAdsController {
     };
   }
 
+  @Get('payment-ready')
+  @UseGuards(FirebaseAuthGuard)
+  async isAdReadyForPayment(
+    @User() user: AuthenticatedUser,
+  ): Promise<ApiResponse<any>> {
+    const isReady = await this.matrimonialAdsService.isAdReadyForPayment(
+      user.uid,
+    );
+    return {
+      success: true,
+      data: { isReadyForPayment: isReady },
+    };
+  }
+
+  @Get('submission-status')
+  @UseGuards(FirebaseAuthGuard)
+  async getAdSubmissionStatus(
+    @User() user: AuthenticatedUser,
+  ): Promise<ApiResponse<any>> {
+    const status = await this.matrimonialAdsService.getAdSubmissionStatus(
+      user.uid,
+    );
+    return {
+      success: true,
+      data: status,
+    };
+  }
+
   @Get(':adId')
   async getAdData(@Param('adId') adId: string): Promise<ApiResponse<any>> {
     const result = await this.matrimonialAdsService.getAdData(adId);

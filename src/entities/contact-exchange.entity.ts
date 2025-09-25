@@ -16,12 +16,6 @@ export class ContactExchange {
   @Column()
   interestRequestId: string;
 
-  @Column()
-  fromUserId: string;
-
-  @Column()
-  toUserId: string;
-
   @Column({ type: 'json' })
   sharedContactInfo: {
     phone?: string;

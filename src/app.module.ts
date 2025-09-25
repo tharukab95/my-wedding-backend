@@ -13,6 +13,7 @@ import { MatrimonialAdsModule } from './modules/matrimonial-ads/matrimonial-ads.
 import { MatchesModule } from './modules/matches/matches.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { UsersModule } from './modules/users/users.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 import { UserResolverService } from './services/user-resolver.service';
 import { UserResolverMiddleware } from './middleware/user-resolver.middleware';
 import * as entities from './entities';
@@ -34,6 +35,7 @@ import * as entities from './entities';
     MatchesModule,
     NotificationsModule,
     UsersModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [

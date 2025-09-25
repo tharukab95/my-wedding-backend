@@ -14,3 +14,7 @@ export { ContactExchange } from './contact-exchange.entity';
 
 // New optimized entities
 export { LookingForPreferences } from './looking-for-preferences.entity';
+
+// Payment entities
+export { PricingPlan } from './pricing-plan.entity';
+export { Payment } from './payment.entity';
