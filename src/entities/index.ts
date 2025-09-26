@@ -10,9 +10,16 @@ export { Match } from './match.entity';
 export { InterestRequest } from './interest-request.entity';
 export { ContactExchange } from './contact-exchange.entity';
 
+// Read status tracking entities
+export { MatchRead } from './match-read.entity';
+export { InterestRequestRead } from './interest-request-read.entity';
+
 // New optimized entities
 export { LookingForPreferences } from './looking-for-preferences.entity';
 
 // Payment entities
 export { PricingPlan } from './pricing-plan.entity';
 export { Payment } from './payment.entity';
+
+// Notification entity
+export { Notification } from './notification.entity';

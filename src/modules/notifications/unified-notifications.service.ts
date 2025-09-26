@@ -1,9 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InterestRequest } from '../../entities/interest-request.entity';
 import { Match } from '../../entities/match.entity';
+import { MatchRead } from '../../entities/match-read.entity';
+import { InterestRequestRead } from '../../entities/interest-request-read.entity';
 
 @Injectable()
 export class UnifiedNotificationsService {
@@ -12,25 +16,56 @@ export class UnifiedNotificationsService {
     private interestRequestRepository: Repository<InterestRequest>,
     @InjectRepository(Match)
     private matchRepository: Repository<Match>,
+    @InjectRepository(MatchRead)
+    private matchReadRepository: Repository<MatchRead>,
+    @InjectRepository(InterestRequestRead)
+    private interestRequestReadRepository: Repository<InterestRequestRead>,
   ) {}
 
   async getUnreadCounts(userId: string) {
-    const [interestRequestsCount, matchesCount] = await Promise.all([
-      this.interestRequestRepository.count({
-        where: { toUserId: userId, isRead: false },
-      }),
-      this.matchRepository.count({
-        where: [
-          { user1Id: userId, isRead: false },
-          { user2Id: userId, isRead: false },
-        ],
-      }),
-    ]);
+    // Get all interest requests for this user
+    const allInterestRequests = await this.interestRequestRepository.find({
+      where: { toUserId: userId },
+    });
+
+    // Get all matches for this user
+    const allMatches = await this.matchRepository.find({
+      where: [{ user1Id: userId }, { user2Id: userId }],
+    });
+
+    // Get read status for interest requests
+    const readInterestRequestIds = await this.interestRequestReadRepository
+      .createQueryBuilder('irr')
+      .select('irr.interestRequestId')
+      .where('irr.userId = :userId', { userId })
+      .getRawMany();
+
+    const readInterestRequestIdSet = new Set(
+      readInterestRequestIds.map((r) => r.irr_interestRequestId),
+    );
+
+    // Get read status for matches
+    const readMatchIds = await this.matchReadRepository
+      .createQueryBuilder('mr')
+      .select('mr.matchId')
+      .where('mr.userId = :userId', { userId })
+      .getRawMany();
+
+    const readMatchIdSet = new Set(readMatchIds.map((r: any) => r.mr_matchId));
+
+    // Count unread items
+    const unreadInterestRequests = allInterestRequests.filter(
+      (ir) => !readInterestRequestIdSet.has(ir.id),
+    ).length;
+
+    const unreadMatches = allMatches.filter(
+      (match) => !readMatchIdSet.has(match.id),
+    ).length;
 
     return {
-      interestRequests: interestRequestsCount,
-      matches: matchesCount,
-      total: interestRequestsCount + matchesCount,
+      interestRequests: unreadInterestRequests,
+      matches: unreadMatches,
+      total: unreadInterestRequests + unreadMatches,
     };
   }
 
@@ -39,32 +74,74 @@ export class UnifiedNotificationsService {
     page: number = 1,
     limit: number = 20,
   ) {
-    // Get interest requests
-    const interestRequests = await this.interestRequestRepository.find({
-      where: { toUserId: userId },
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    // Get all interest requests and matches for this user
+    const [allInterestRequests, allMatches] = await Promise.all([
+      this.interestRequestRepository.find({
+        where: { toUserId: userId },
+        order: { createdAt: 'DESC' },
+      }),
+      this.matchRepository.find({
+        where: [{ user1Id: userId }, { user2Id: userId }],
+        order: { createdAt: 'DESC' },
+      }),
+    ]);
 
-    // Get matches
-    const matches = await this.matchRepository.find({
-      where: [{ user1Id: userId }, { user2Id: userId }],
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    // Get read status for interest requests
+    const readInterestRequestIds = await this.interestRequestReadRepository
+      .createQueryBuilder('irr')
+      .select('irr.interestRequestId')
+      .where('irr.userId = :userId', { userId })
+      .getRawMany();
+
+    const readInterestRequestIdSet = new Set(
+      readInterestRequestIds.map((r) => r.irr_interestRequestId),
+    );
+
+    // Get read status for matches
+    const readMatchIds = await this.matchReadRepository
+      .createQueryBuilder('mr')
+      .select('mr.matchId')
+      .where('mr.userId = :userId', { userId })
+      .getRawMany();
+
+    const readMatchIdSet = new Set(readMatchIds.map((r: any) => r.mr_matchId));
+
+    // Get read timestamps for interest requests
+    const readInterestRequestTimestamps =
+      await this.interestRequestReadRepository
+        .createQueryBuilder('irr')
+        .select(['irr.interestRequestId', 'irr.readAt'])
+        .where('irr.userId = :userId', { userId })
+        .getRawMany();
+
+    const readInterestRequestTimestampMap = new Map(
+      readInterestRequestTimestamps.map((r: any) => [
+        r.irr_interestRequestId,
+        r.irr_readAt,
+      ]),
+    );
+
+    // Get read timestamps for matches
+    const readMatchTimestamps = await this.matchReadRepository
+      .createQueryBuilder('mr')
+      .select(['mr.matchId', 'mr.readAt'])
+      .where('mr.userId = :userId', { userId })
+      .getRawMany();
+
+    const readMatchTimestampMap = new Map(
+      readMatchTimestamps.map((r: any) => [r.mr_matchId, r.mr_readAt]),
+    );
 
     // Combine and format notifications
     const notifications = [
-      ...interestRequests.map((ir) => ({
+      ...allInterestRequests.map((ir) => ({
         id: ir.id,
         type: 'interest_request',
         title: 'New Interest Received',
         message: 'Someone has expressed interest in your profile',
-        isRead: ir.isRead,
+        isRead: readInterestRequestIdSet.has(ir.id),
         createdAt: ir.createdAt,
-        readAt: ir.readAt,
+        readAt: readInterestRequestTimestampMap.get(ir.id) || null,
         metadata: {
           interestRequestId: ir.id,
           fromUserId: ir.fromUserId,
@@ -72,14 +149,14 @@ export class UnifiedNotificationsService {
           message: ir.message,
         },
       })),
-      ...matches.map((match) => ({
+      ...allMatches.map((match) => ({
         id: match.id,
         type: 'match',
         title: 'New Match!',
         message: 'You have a new match!',
-        isRead: match.isRead,
+        isRead: readMatchIdSet.has(match.id),
         createdAt: match.createdAt,
-        readAt: match.readAt,
+        readAt: readMatchTimestampMap.get(match.id) || null,
         metadata: {
           matchId: match.id,
           user1Id: match.user1Id,
@@ -96,18 +173,10 @@ export class UnifiedNotificationsService {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
 
-    // Get total count for pagination
-    const [totalInterestRequests, totalMatches] = await Promise.all([
-      this.interestRequestRepository.count({ where: { toUserId: userId } }),
-      this.matchRepository.count({
-        where: [{ user1Id: userId }, { user2Id: userId }],
-      }),
-    ]);
-
-    const total = totalInterestRequests + totalMatches;
+    const total = notifications.length;
 
     return {
-      notifications: notifications.slice(0, limit),
+      notifications: notifications.slice((page - 1) * limit, page * limit),
       pagination: {
         page,
         limit,
@@ -199,65 +268,145 @@ export class UnifiedNotificationsService {
   }
 
   async markInterestRequestAsRead(interestRequestId: string, userId: string) {
-    const result = await this.interestRequestRepository.update(
-      { id: interestRequestId, toUserId: userId },
-      { isRead: true, readAt: new Date() },
-    );
+    // Check if the user is the recipient of this interest request
+    const interestRequest = await this.interestRequestRepository.findOne({
+      where: { id: interestRequestId, toUserId: userId },
+    });
+
+    if (!interestRequest) {
+      return {
+        success: false,
+        affected: 0,
+      };
+    }
+
+    // Create or update the read record
+    const existingRead = await this.interestRequestReadRepository.findOne({
+      where: { interestRequestId, userId },
+    });
+
+    if (existingRead) {
+      // Update existing read record
+      await this.interestRequestReadRepository.update(
+        { interestRequestId, userId },
+        { readAt: new Date() },
+      );
+    } else {
+      // Create new read record
+      await this.interestRequestReadRepository.save({
+        interestRequestId,
+        userId,
+        readAt: new Date(),
+      });
+    }
 
     return {
-      success: (result.affected || 0) > 0,
-      affected: result.affected || 0,
+      success: true,
+      affected: 1,
     };
   }
 
   async markMatchAsRead(matchId: string, userId: string) {
-    const result = await this.matchRepository.update(
-      { id: matchId, user1Id: userId },
-      { isRead: true, readAt: new Date() },
-    );
-
-    if ((result.affected || 0) === 0) {
-      // Try as user2
-      const result2 = await this.matchRepository.update(
+    // Check if the user is part of this match
+    const match = await this.matchRepository.findOne({
+      where: [
+        { id: matchId, user1Id: userId },
         { id: matchId, user2Id: userId },
-        { isRead: true, readAt: new Date() },
-      );
+      ],
+    });
+
+    if (!match) {
       return {
-        success: (result2.affected || 0) > 0,
-        affected: result2.affected || 0,
+        success: false,
+        affected: 0,
       };
     }
 
+    // Create or update the read record
+    const existingRead = await this.matchReadRepository.findOne({
+      where: { matchId, userId },
+    });
+
+    if (existingRead) {
+      // Update existing read record
+      await this.matchReadRepository.update(
+        { matchId, userId },
+        { readAt: new Date() },
+      );
+    } else {
+      // Create new read record
+      await this.matchReadRepository.save({
+        matchId,
+        userId,
+        readAt: new Date(),
+      });
+    }
+
     return {
-      success: (result.affected || 0) > 0,
-      affected: result.affected || 0,
+      success: true,
+      affected: 1,
     };
   }
 
   async markAllInterestRequestsAsRead(userId: string) {
-    const result = await this.interestRequestRepository.update(
-      { toUserId: userId, isRead: false },
-      { isRead: true, readAt: new Date() },
-    );
+    // Get all interest requests for this user that haven't been read yet
+    const unreadInterestRequests = await this.interestRequestRepository
+      .createQueryBuilder('ir')
+      .leftJoin(
+        'interest_request_reads',
+        'irr',
+        'irr.interestRequestId = ir.id AND irr.userId = :userId',
+        { userId },
+      )
+      .where('ir.toUserId = :userId', { userId })
+      .andWhere('irr.id IS NULL')
+      .getMany();
+
+    // Create read records for all unread interest requests
+    const readRecords = unreadInterestRequests.map((ir) => ({
+      interestRequestId: ir.id,
+      userId,
+      readAt: new Date(),
+    }));
+
+    if (readRecords.length > 0) {
+      await this.interestRequestReadRepository.save(readRecords);
+    }
 
     return {
       success: true,
-      affected: result.affected || 0,
+      affected: readRecords.length,
     };
   }
 
   async markAllMatchesAsRead(userId: string) {
-    const result = await this.matchRepository.update(
-      [
-        { user1Id: userId, isRead: false },
-        { user2Id: userId, isRead: false },
-      ],
-      { isRead: true, readAt: new Date() },
-    );
+    // Get all matches for this user that haven't been read yet
+    const unreadMatches = await this.matchRepository
+      .createQueryBuilder('match')
+      .leftJoin(
+        'match_reads',
+        'mr',
+        'mr.matchId = match.id AND mr.userId = :userId',
+        { userId },
+      )
+      .where('(match.user1Id = :userId OR match.user2Id = :userId)', { userId })
+      .andWhere('mr.id IS NULL')
+      .getMany();
+
+    // Create read records for all unread matches
+    const readRecords = unreadMatches.map((match) => ({
+      matchId: match.id,
+      userId,
+      readAt: new Date(),
+    }));
+
+    if (readRecords.length > 0) {
+      await this.matchReadRepository.save(readRecords);
+    }
 
     return {
       success: true,
-      affected: result.affected || 0,
+      affected: readRecords.length,
     };
   }
 }
