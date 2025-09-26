@@ -10,8 +10,8 @@ import { Match } from '../../entities/match.entity';
 import { InterestRequest } from '../../entities/interest-request.entity';
 import { User } from '../../entities/user.entity';
 import { AdPhoto } from '../../entities/ad-photo.entity';
+import { ContactExchange } from '../../entities/contact-exchange.entity';
 import { ErrorCodes } from '../../dto/common.dto';
-import { NotificationsService } from '../notifications/notifications.service';
 import { calculateAge } from '../../utils/age.util';
 
 @Injectable()
@@ -27,7 +27,8 @@ export class MatchesService {
     private userRepository: Repository<User>,
     @InjectRepository(AdPhoto)
     private adPhotoRepository: Repository<AdPhoto>,
-    private notificationsService: NotificationsService,
+    @InjectRepository(ContactExchange)
+    private contactExchangeRepository: Repository<ContactExchange>,
   ) {}
 
   async findMatches(adId: string, page: number = 1, limit: number = 20) {
@@ -192,20 +193,6 @@ export class MatchesService {
     const savedInterest =
       await this.interestRequestRepository.save(interestRequest);
 
-    // Send notification to ad owner
-    await this.notificationsService.createNotification(
-      ad.userId,
-      'interest',
-      'New Interest Received',
-      `$Someone has expressed interest in your profile`,
-      {
-        interestId: savedInterest.id,
-        fromUserId: userId,
-        adId: adId,
-        message: message,
-      },
-    );
-
     return {
       interestId: savedInterest.id,
       adId: savedInterest.toAdId,
@@ -247,12 +234,6 @@ export class MatchesService {
       .getMany();
 
     const formattedInterests = interests.map((interestRequest) => {
-      const profilePhoto = (
-        interestRequest.fromAd as MatrimonialAd
-      ).photos?.find((photo: any) => (photo as AdPhoto).isProfilePhoto) as
-        | AdPhoto
-        | undefined;
-
       return {
         interestId: interestRequest.id,
         fromUser: {
@@ -265,7 +246,6 @@ export class MatchesService {
           age: calculateAge((interestRequest.fromAd as MatrimonialAd).birthday),
           profession: (interestRequest.fromAd as MatrimonialAd).profession,
           location: (interestRequest.fromAd as MatrimonialAd).location,
-          profilePhoto: profilePhoto?.filePath,
         },
         message: interestRequest.message,
         compatibilityScore: interestRequest.compatibilityScore,
@@ -330,29 +310,19 @@ export class MatchesService {
       const savedMatch = await this.matchRepository.save(match);
       matchId = savedMatch.id;
 
-      // Send notification to the user who expressed interest
-      await this.notificationsService.createNotification(
-        interestRequest.fromUserId,
-        'match',
-        'Interest Accepted!',
-        'Your interest has been accepted. You have a new match!',
-        {
-          matchId: savedMatch.id,
-          interestId: interestId,
-        },
-      );
-    } else {
-      // Send notification for rejection
-      await this.notificationsService.createNotification(
-        interestRequest.fromUserId,
-        'interest',
-        'Interest Response',
-        'Your interest was not accepted at this time.',
-        {
-          interestId: interestId,
-          status: 'rejected',
-        },
-      );
+      // Create contact exchange record for sharing contact details
+      const contactExchange = new ContactExchange();
+      contactExchange.interestRequestId = interestId;
+      contactExchange.sharedContactInfo = {
+        phone: undefined,
+        email: undefined,
+        address: undefined,
+      };
+      contactExchange.photosShared = false;
+      contactExchange.horoscopeShared = false;
+      contactExchange.isMutual = false; // Will be true when both parties agree
+
+      await this.contactExchangeRepository.save(contactExchange);
     }
 
     return {
@@ -487,5 +457,221 @@ export class MatchesService {
     factors++;
 
     return Math.round((score / factors) * 100) || 0;
+  }
+
+  // Contact Exchange Methods
+  async getContactExchange(interestId: string) {
+    const contactExchange = await this.contactExchangeRepository.findOne({
+      where: { interestRequestId: interestId },
+      relations: ['interestRequest'],
+    });
+
+    if (!contactExchange) {
+      throw new NotFoundException({
+        code: ErrorCodes.CONTACT_EXCHANGE_NOT_FOUND,
+        message: 'Contact exchange not found',
+      });
+    }
+
+    return contactExchange;
+  }
+
+  async shareContactInfo(
+    interestId: string,
+    userId: string,
+    contactInfo: {
+      phone?: string;
+      email?: string;
+      address?: string;
+    },
+  ) {
+    const contactExchange = await this.getContactExchange(interestId);
+    const interestRequest = await this.interestRequestRepository.findOne({
+      where: { id: interestId },
+    });
+
+    if (!interestRequest) {
+      throw new NotFoundException({
+        code: ErrorCodes.INTEREST_NOT_FOUND,
+        message: 'Interest request not found',
+      });
+    }
+
+    // Check if user is part of this interest request
+    if (
+      userId !== interestRequest.fromUserId &&
+      userId !== interestRequest.toUserId
+    ) {
+      throw new BadRequestException({
+        code: ErrorCodes.UNAUTHORIZED,
+        message:
+          'You are not authorized to share contact info for this interest',
+      });
+    }
+
+    // Update shared contact info
+    await this.contactExchangeRepository.update(contactExchange.id, {
+      sharedContactInfo: {
+        ...contactExchange.sharedContactInfo,
+        ...contactInfo,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Contact information shared successfully',
+    };
+  }
+
+  async sharePhotos(interestId: string, userId: string) {
+    const contactExchange = await this.getContactExchange(interestId);
+    const interestRequest = await this.interestRequestRepository.findOne({
+      where: { id: interestId },
+    });
+
+    if (!interestRequest) {
+      throw new NotFoundException({
+        code: ErrorCodes.INTEREST_NOT_FOUND,
+        message: 'Interest request not found',
+      });
+    }
+
+    // Check if user is part of this interest request
+    if (
+      userId !== interestRequest.fromUserId &&
+      userId !== interestRequest.toUserId
+    ) {
+      throw new BadRequestException({
+        code: ErrorCodes.UNAUTHORIZED,
+        message: 'You are not authorized to share photos for this interest',
+      });
+    }
+
+    // Update photos shared status
+    await this.contactExchangeRepository.update(contactExchange.id, {
+      photosShared: true,
+    });
+
+    return {
+      success: true,
+      message: 'Photos shared successfully',
+    };
+  }
+
+  async shareHoroscope(interestId: string, userId: string) {
+    const contactExchange = await this.getContactExchange(interestId);
+    const interestRequest = await this.interestRequestRepository.findOne({
+      where: { id: interestId },
+    });
+
+    if (!interestRequest) {
+      throw new NotFoundException({
+        code: ErrorCodes.INTEREST_NOT_FOUND,
+        message: 'Interest request not found',
+      });
+    }
+
+    // Check if user is part of this interest request
+    if (
+      userId !== interestRequest.fromUserId &&
+      userId !== interestRequest.toUserId
+    ) {
+      throw new BadRequestException({
+        code: ErrorCodes.UNAUTHORIZED,
+        message: 'You are not authorized to share horoscope for this interest',
+      });
+    }
+
+    // Update horoscope shared status
+    await this.contactExchangeRepository.update(contactExchange.id, {
+      horoscopeShared: true,
+    });
+
+    return {
+      success: true,
+      message: 'Horoscope shared successfully',
+    };
+  }
+
+  async getSharedInfo(interestId: string, userId: string) {
+    const contactExchange = await this.getContactExchange(interestId);
+    const interestRequest = await this.interestRequestRepository.findOne({
+      where: { id: interestId },
+    });
+
+    if (!interestRequest) {
+      throw new NotFoundException({
+        code: ErrorCodes.INTEREST_NOT_FOUND,
+        message: 'Interest request not found',
+      });
+    }
+
+    // Check if user is part of this interest request
+    if (
+      userId !== interestRequest.fromUserId &&
+      userId !== interestRequest.toUserId
+    ) {
+      throw new BadRequestException({
+        code: ErrorCodes.UNAUTHORIZED,
+        message: 'You are not authorized to view shared info for this interest',
+      });
+    }
+
+    // Return only the information that has been shared
+    return {
+      contactInfo: contactExchange.sharedContactInfo,
+      photosShared: contactExchange.photosShared,
+      horoscopeShared: contactExchange.horoscopeShared,
+      isMutual: contactExchange.isMutual,
+    };
+  }
+
+  async getInterestRequest(interestId: string) {
+    const interestRequest = await this.interestRequestRepository.findOne({
+      where: { id: interestId },
+      relations: ['fromAd', 'fromAd.user', 'fromAd.horoscope'],
+    });
+
+    if (!interestRequest) {
+      throw new NotFoundException({
+        code: ErrorCodes.INTEREST_NOT_FOUND,
+        message: 'Interest request not found',
+      });
+    }
+
+    const ad = interestRequest.fromAd as MatrimonialAd;
+    const user = ad.user as User;
+    const horoscope = ad.horoscope;
+
+    return {
+      id: interestRequest.id,
+      createdAt: interestRequest.createdAt,
+      message: interestRequest.message,
+      compatibilityScore: interestRequest.compatibilityScore,
+      status: interestRequest.status,
+      ad: {
+        id: ad.id,
+        userId: ad.userId,
+        name: `${ad.type} - ${calculateAge(ad.birthday)} years`,
+        age: calculateAge(ad.birthday),
+        profession: ad.profession,
+        location: ad.location,
+        type: ad.type,
+        maritalStatus: ad.maritalStatus,
+        height: ad.height,
+        religion: ad.religion,
+        education: ad.education,
+        horoscope: horoscope
+          ? {
+              id: horoscope.id,
+              rashi: horoscope.rashi,
+              nakshatra: horoscope.nakshatra,
+              birthDate: horoscope.birthDate,
+              birthTime: horoscope.birthTime,
+              birthPlace: horoscope.birthPlace,
+            }
+          : null,
+      },
+    };
   }
 }

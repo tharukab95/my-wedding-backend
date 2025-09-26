@@ -2,7 +2,6 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  ManyToOne,
   OneToMany,
   OneToOne,
   JoinColumn,
@@ -131,7 +130,7 @@ export class MatrimonialAd {
   boostedAt: Date | null;
 
   // Relations
-  @ManyToOne('User', 'matrimonialAds')
+  @OneToOne('User', 'matrimonialAd')
   @JoinColumn({ name: 'userId' })
   user: any;
 

@@ -5,8 +5,6 @@ export { AdPhoto } from './ad-photo.entity';
 export { AdHoroscope } from './ad-horoscope.entity';
 // PreferredProfession and PreferredHabit entities removed - now using LookingForPreferences
 export { Match } from './match.entity';
-export { Notification } from './notification.entity';
-export { Message } from './message.entity';
 
 // Legacy entities (keeping for backward compatibility)
 export { InterestRequest } from './interest-request.entity';

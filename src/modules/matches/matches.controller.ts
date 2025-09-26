@@ -1,4 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Controller,
   Get,
@@ -89,6 +91,28 @@ export class MatchesController {
     };
   }
 
+  @Get('interests/:interestId')
+  async getInterestRequest(
+    @Param('interestId') interestId: string,
+  ): Promise<ApiResponse<any>> {
+    try {
+      const result = await this.matchesService.getInterestRequest(interestId);
+
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: error.code || 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'An error occurred',
+        },
+      };
+    }
+  }
+
   @Post('interests/:interestId/respond')
   @UsePipes(new ValidationPipe({ transform: true }))
   async respondToInterest(
@@ -133,6 +157,64 @@ export class MatchesController {
       matchId,
       respondDto.status,
     );
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  // Contact Exchange Endpoints
+  @Get('interests/:interestId/shared-info')
+  @UseGuards(FirebaseAuthGuard)
+  async getSharedInfo(
+    @Param('interestId') interestId: string,
+    @CurrentUserId() userId: string,
+  ): Promise<ApiResponse<any>> {
+    const result = await this.matchesService.getSharedInfo(interestId, userId);
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  @Post('interests/:interestId/share-contact')
+  @UseGuards(FirebaseAuthGuard)
+  async shareContactInfo(
+    @Param('interestId') interestId: string,
+    @CurrentUserId() userId: string,
+    @Body() body: { phone?: string; email?: string; address?: string },
+  ): Promise<ApiResponse<any>> {
+    const result = await this.matchesService.shareContactInfo(
+      interestId,
+      userId,
+      body,
+    );
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  @Post('interests/:interestId/share-photos')
+  @UseGuards(FirebaseAuthGuard)
+  async sharePhotos(
+    @Param('interestId') interestId: string,
+    @CurrentUserId() userId: string,
+  ): Promise<ApiResponse<any>> {
+    const result = await this.matchesService.sharePhotos(interestId, userId);
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  @Post('interests/:interestId/share-horoscope')
+  @UseGuards(FirebaseAuthGuard)
+  async shareHoroscope(
+    @Param('interestId') interestId: string,
+    @CurrentUserId() userId: string,
+  ): Promise<ApiResponse<any>> {
+    const result = await this.matchesService.shareHoroscope(interestId, userId);
     return {
       success: true,
       data: result,

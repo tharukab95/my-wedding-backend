@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MatchesController } from './matches.controller';
 import { MatchesService } from './matches.service';
-import { NotificationsService } from '../notifications/notifications.service';
 import { UserResolverService } from '../../services/user-resolver.service';
 import {
   MatrimonialAd,
@@ -10,7 +9,7 @@ import {
   InterestRequest,
   User,
   AdPhoto,
-  Notification,
+  ContactExchange,
 } from '../../entities';
 
 @Module({
@@ -21,11 +20,11 @@ import {
       InterestRequest,
       User,
       AdPhoto,
-      Notification,
+      ContactExchange,
     ]),
   ],
   controllers: [MatchesController],
-  providers: [MatchesService, NotificationsService, UserResolverService],
+  providers: [MatchesService, UserResolverService],
   exports: [MatchesService],
 })
 export class MatchesModule {}

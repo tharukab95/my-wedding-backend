@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,7 +19,7 @@ export class UsersService {
   async getUserProfile(userId: string) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['matrimonialAds'],
+      relations: ['matrimonialAd'],
     });
 
     if (!user) {
@@ -27,19 +29,21 @@ export class UsersService {
       });
     }
 
-    const matrimonialAds = user.matrimonialAds.map((ad: MatrimonialAd) => ({
-      adId: ad.id,
-      type: ad.type,
-      status: ad.status,
-      createdAt: ad.createdAt,
-    }));
+    const matrimonialAd = user.matrimonialAd
+      ? {
+          adId: user.matrimonialAd.id,
+          type: user.matrimonialAd.type,
+          status: user.matrimonialAd.status,
+          createdAt: user.matrimonialAd.createdAt,
+        }
+      : null;
 
     return {
       userId: user.id,
       firebaseUserId: user.firebaseUserId,
       phoneNumber: user.phoneNumber,
       isVerified: user.isVerified,
-      matrimonialAds,
+      matrimonialAd,
       createdAt: user.createdAt,
     };
   }

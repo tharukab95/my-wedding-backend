@@ -3,7 +3,6 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToOne,
-  ManyToOne,
   JoinColumn,
   CreateDateColumn,
 } from 'typeorm';
@@ -39,12 +38,4 @@ export class ContactExchange {
   @OneToOne('InterestRequest', 'contactExchange')
   @JoinColumn({ name: 'interestRequestId' })
   interestRequest: any;
-
-  @ManyToOne('User')
-  @JoinColumn({ name: 'fromUserId' })
-  fromUser: any;
-
-  @ManyToOne('User')
-  @JoinColumn({ name: 'toUserId' })
-  toUser: any;
 }

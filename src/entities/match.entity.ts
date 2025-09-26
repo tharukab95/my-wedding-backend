@@ -3,7 +3,6 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
-  OneToMany,
   JoinColumn,
   CreateDateColumn,
 } from 'typeorm';
@@ -40,6 +39,12 @@ export class Match {
   @Column({ type: 'timestamp', nullable: true })
   expiresAt: Date;
 
+  @Column({ default: false })
+  isRead: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  readAt: Date | null;
+
   // Relations
   @ManyToOne('User', 'matchesAsUser1')
   @JoinColumn({ name: 'user1Id' })
@@ -56,7 +61,4 @@ export class Match {
   @ManyToOne('MatrimonialAd', 'matchesAsAd2')
   @JoinColumn({ name: 'ad2Id' })
   ad2: any;
-
-  @OneToMany('Message', 'match')
-  messages: any[];
 }

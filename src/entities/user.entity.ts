@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToMany,
+  OneToOne,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -28,27 +29,9 @@ export class User {
   updatedAt: Date;
 
   // Relations
-  @OneToMany('MatrimonialAd', 'user')
-  matrimonialAds: any[];
-
-  @OneToMany('Match', 'user1')
-  matchesAsUser1: any[];
-
-  @OneToMany('Match', 'user2')
-  matchesAsUser2: any[];
+  @OneToOne('MatrimonialAd', 'user')
+  matrimonialAd: any;
 
   @OneToMany('Notification', 'user')
   notifications: any[];
-
-  @OneToMany('InterestRequest', 'fromUser')
-  sentInterestRequests: any[];
-
-  @OneToMany('InterestRequest', 'toUser')
-  receivedInterestRequests: any[];
-
-  @OneToMany('Message', 'sender')
-  sentMessages: any[];
-
-  @OneToMany('Message', 'receiver')
-  receivedMessages: any[];
 }

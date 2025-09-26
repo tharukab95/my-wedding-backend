@@ -50,6 +50,12 @@ export class InterestRequest {
   @Column({ type: 'timestamp', nullable: true })
   expiresAt: Date;
 
+  @Column({ default: false })
+  isRead: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  readAt: Date | null;
+
   // Relations
   @ManyToOne('User', 'sentInterests')
   @JoinColumn({ name: 'fromUserId' })

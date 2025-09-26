@@ -1,10 +1,10 @@
-import { 
-  Entity, 
-  PrimaryGeneratedColumn, 
-  Column, 
-  OneToOne, 
-  JoinColumn, 
-  CreateDateColumn 
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToOne,
+  JoinColumn,
+  CreateDateColumn,
 } from 'typeorm';
 
 @Entity('ad_horoscopes')
