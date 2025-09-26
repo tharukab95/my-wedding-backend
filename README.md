@@ -101,7 +101,7 @@ CREATE DATABASE matrimonial_db;
 \q
 ```
 
-### 2. Generate Initial Migration
+### 2. Generate Initial Migrations
 
 ```bash
 # Generate migration from entities
