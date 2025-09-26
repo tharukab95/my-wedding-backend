@@ -14,6 +14,10 @@ export { ContactExchange } from './contact-exchange.entity';
 export { MatchRead } from './match-read.entity';
 export { InterestRequestRead } from './interest-request-read.entity';
 
+// User interaction tracking entities
+export { UserAdInteraction } from './user-ad-interaction.entity';
+export { InteractionType } from './user-ad-interaction.entity';
+
 // New optimized entities
 export { LookingForPreferences } from './looking-for-preferences.entity';
 

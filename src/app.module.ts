@@ -16,7 +16,22 @@ import { UsersModule } from './modules/users/users.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { UserResolverService } from './services/user-resolver.service';
 import { UserResolverMiddleware } from './middleware/user-resolver.middleware';
-import * as entities from './entities';
+import {
+  User,
+  MatrimonialAd,
+  AdPhoto,
+  AdHoroscope,
+  Match,
+  InterestRequest,
+  ContactExchange,
+  MatchRead,
+  InterestRequestRead,
+  UserAdInteraction,
+  LookingForPreferences,
+  PricingPlan,
+  Payment,
+  Notification,
+} from './entities';
 
 @Module({
   imports: [
@@ -30,7 +45,22 @@ import * as entities from './entities';
         getTypeOrmConfig(configService),
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature(Object.values(entities)),
+    TypeOrmModule.forFeature([
+      User,
+      MatrimonialAd,
+      AdPhoto,
+      AdHoroscope,
+      Match,
+      InterestRequest,
+      ContactExchange,
+      MatchRead,
+      InterestRequestRead,
+      UserAdInteraction,
+      LookingForPreferences,
+      PricingPlan,
+      Payment,
+      Notification,
+    ]),
     MatrimonialAdsModule,
     MatchesModule,
     NotificationsModule,

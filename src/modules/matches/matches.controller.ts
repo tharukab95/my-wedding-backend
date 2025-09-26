@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { MatchesService } from './matches.service';
+import { PersonalizedFeedService } from './personalized-feed.service';
 import {
   FindMatchesQueryDto,
   ExpressInterestDto,
@@ -32,6 +33,7 @@ import { UserResolverService } from '../../services/user-resolver.service';
 export class MatchesController {
   constructor(
     private readonly matchesService: MatchesService,
+    private readonly personalizedFeedService: PersonalizedFeedService,
     private readonly userResolverService: UserResolverService,
   ) {}
 
@@ -52,6 +54,72 @@ export class MatchesController {
     };
   }
 
+  @Get('matches/personalized-feed')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getPersonalizedFeed(
+    @User() user: AuthenticatedUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('minAge') minAge?: string,
+    @Query('maxAge') maxAge?: string,
+    @Query('type') type?: 'bride' | 'groom',
+    @Query('location') location?: string,
+    @Query('religion') religion?: string,
+    @Query('education') education?: string,
+    @Query('profession') profession?: string,
+    @Query('caste') caste?: string,
+    @Query('ethnicity') ethnicity?: string,
+    @Query('maritalStatus') maritalStatus?: string,
+    @Query('hasChildren') hasChildren?: string,
+    @Query('isDrinking') isDrinking?: string,
+    @Query('isSmoking') isSmoking?: string,
+    @Query('skinColor') skinColor?: string,
+  ): Promise<ApiResponse<any>> {
+    try {
+      const resolvedUser = await this.userResolverService.findOrCreateUser(
+        user.uid,
+        user.phoneNumber,
+      );
+
+      const options = {
+        page: page ? parseInt(page, 10) : 1,
+        limit: limit ? parseInt(limit, 10) : 20,
+        minAge: minAge ? parseInt(minAge, 10) : undefined,
+        maxAge: maxAge ? parseInt(maxAge, 10) : undefined,
+        type,
+        location,
+        religion,
+        education,
+        profession,
+        caste,
+        ethnicity,
+        maritalStatus,
+        hasChildren: hasChildren ? hasChildren === 'true' : undefined,
+        isDrinking: isDrinking ? isDrinking === 'true' : undefined,
+        isSmoking: isSmoking ? isSmoking === 'true' : undefined,
+        skinColor,
+      };
+
+      const result = await this.personalizedFeedService.getPersonalizedFeed(
+        resolvedUser.id,
+        options,
+      );
+
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: error.code || 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'An error occurred',
+        },
+      };
+    }
+  }
+
   @Post('interests/express')
   @UsePipes(new ValidationPipe({ transform: true }))
   async expressInterest(
@@ -68,10 +136,52 @@ export class MatchesController {
       expressInterestDto.adId,
       expressInterestDto.message,
     );
+
+    // Record the interaction
+    await this.personalizedFeedService.recordInteraction(
+      resolvedUserId,
+      expressInterestDto.adId,
+      'expressed_interest' as any,
+      { message: expressInterestDto.message },
+    );
+
     return {
       success: true,
       data: result,
     };
+  }
+
+  @Post('interactions/record')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async recordInteraction(
+    @Body() body: { adId: string; interactionType: string; metadata?: any },
+    @User() user: AuthenticatedUser,
+  ): Promise<ApiResponse<any>> {
+    try {
+      const resolvedUserId = await this.userResolverService.resolveUserId(
+        user.uid,
+      );
+
+      await this.personalizedFeedService.recordInteraction(
+        resolvedUserId,
+        body.adId,
+        body.interactionType as any,
+        body.metadata,
+      );
+
+      return {
+        success: true,
+        data: { message: 'Interaction recorded successfully' },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: error.code || 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'An error occurred',
+        },
+      };
+    }
   }
 
   @Get('interests/received')
