@@ -17,6 +17,9 @@ export class MatrimonialAd {
   @Column({ unique: true })
   userId: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  name: string | null;
+
   @Column({ type: 'int', default: 1 })
   currentPhase: number;
 
@@ -117,10 +120,10 @@ export class MatrimonialAd {
   updatedAt: Date;
 
   @Column({ type: 'timestamp', nullable: true })
-  submittedAt: Date;
+  submittedAt: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  expiresAt: Date;
+  expiresAt: Date | null;
 
   // Boosted ads for premium placement
   @Column({ default: false })

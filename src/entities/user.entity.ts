@@ -19,6 +19,9 @@ export class User {
   @Column({ nullable: true })
   phoneNumber: string;
 
+  @Column({ nullable: true })
+  name: string;
+
   @Column({ default: false })
   isVerified: boolean;
 

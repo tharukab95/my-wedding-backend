@@ -172,8 +172,8 @@ export class PaymentsService {
 
     return {
       merchant_id: merchantId,
-      return_url: 'http://localhost:3001/en/search',
-      cancel_url: 'http://localhost:3001/en/create-matrimonial-ad',
+      return_url: 'https://4b354f52fbe2.ngrok-free.app/en/search',
+      cancel_url: 'https://4b354f52fbe2.ngrok-free.app/en/create-matrimonial-ad',
       notify_url: 'https://4b354f52fbe2.ngrok-free.app/api/payments/webhook',
       first_name: user.phoneNumber || 'User', // Using phone as fallback
       last_name: '',

@@ -1,5 +1,13 @@
-import { IsString, IsEnum, IsDateString, IsInt, IsOptional, IsArray, IsBoolean, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsString,
+  IsEnum,
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsArray,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class InitializeMatrimonialAdDto {
   @IsString()
@@ -24,6 +32,9 @@ export class Phase1DataDto {
 export class Phase2DataDto {
   @IsEnum(['bride', 'groom'])
   type: 'bride' | 'groom';
+
+  @IsString()
+  name: string;
 
   @IsDateString()
   birthday: string;

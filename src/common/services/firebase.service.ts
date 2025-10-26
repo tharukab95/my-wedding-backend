@@ -13,12 +13,20 @@ export class FirebaseService implements OnModuleInit {
       // Initialize Firebase Admin SDK
       const firebaseConfig = {
         projectId: this.configService.get<string>('FIREBASE_PROJECT_ID'),
-        privateKey: this.configService.get<string>('FIREBASE_PRIVATE_KEY')?.replace(/\\n/g, '\n'),
+        privateKey: this.configService
+          .get<string>('FIREBASE_PRIVATE_KEY')
+          ?.replace(/\\n/g, '\n'),
         clientEmail: this.configService.get<string>('FIREBASE_CLIENT_EMAIL'),
       };
 
-      if (!firebaseConfig.projectId || !firebaseConfig.privateKey || !firebaseConfig.clientEmail) {
-        console.warn('Firebase configuration is incomplete. Firebase features will be disabled.');
+      if (
+        !firebaseConfig.projectId ||
+        !firebaseConfig.privateKey ||
+        !firebaseConfig.clientEmail
+      ) {
+        console.warn(
+          'Firebase configuration is incomplete. Firebase features will be disabled.',
+        );
         return;
       }
 
@@ -74,11 +82,14 @@ export class FirebaseService implements OnModuleInit {
     }
   }
 
-  async updateUser(uid: string, userData: {
-    email?: string;
-    phoneNumber?: string;
-    displayName?: string;
-  }): Promise<admin.auth.UserRecord> {
+  async updateUser(
+    uid: string,
+    userData: {
+      email?: string;
+      phoneNumber?: string;
+      displayName?: string;
+    },
+  ): Promise<admin.auth.UserRecord> {
     if (!this.firebaseApp) {
       throw new Error('Firebase Admin SDK not initialized');
     }
@@ -105,7 +116,9 @@ export class FirebaseService implements OnModuleInit {
   // Listen for user creation events
   async setupUserCreationListener() {
     if (!this.firebaseApp) {
-      console.warn('Firebase Admin SDK not initialized. User creation listener not set up.');
+      console.warn(
+        'Firebase Admin SDK not initialized. User creation listener not set up.',
+      );
       return;
     }
 

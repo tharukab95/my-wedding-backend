@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
@@ -291,6 +290,88 @@ export class UnifiedNotificationsController {
 
       return {
         success: result.success,
+        data: result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: error.code || 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'An error occurred',
+        },
+      };
+    }
+  }
+
+  @Get('sent-interests')
+  @UseGuards(FirebaseAuthGuard)
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getSentInterests(
+    @User() user: AuthenticatedUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('includeRead') includeRead?: string,
+  ): Promise<ApiResponse<any>> {
+    try {
+      const resolvedUser = await this.userResolverService.findOrCreateUser(
+        user.uid,
+        user.phoneNumber,
+      );
+
+      const pageNum = page ? parseInt(page, 10) : 1;
+      const limitNum = limit ? parseInt(limit, 10) : 20;
+      const includeReadFlag = includeRead === 'true';
+
+      const result = await this.unifiedNotificationsService.getSentInterests(
+        resolvedUser.id,
+        pageNum,
+        limitNum,
+        includeReadFlag,
+      );
+
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: error.code || 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'An error occurred',
+        },
+      };
+    }
+  }
+
+  @Get('interests-sent')
+  @UseGuards(FirebaseAuthGuard)
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getInterestsSent(
+    @User() user: AuthenticatedUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('includeRead') includeRead?: string,
+  ): Promise<ApiResponse<any>> {
+    try {
+      const resolvedUser = await this.userResolverService.findOrCreateUser(
+        user.uid,
+        user.phoneNumber,
+      );
+
+      const pageNum = page ? parseInt(page, 10) : 1;
+      const limitNum = limit ? parseInt(limit, 10) : 20;
+      const includeReadFlag = includeRead === 'true';
+
+      const result = await this.unifiedNotificationsService.getSentInterests(
+        resolvedUser.id,
+        pageNum,
+        limitNum,
+        includeReadFlag,
+      );
+
+      return {
+        success: true,
         data: result,
       };
     } catch (error) {

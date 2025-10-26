@@ -8,6 +8,7 @@ import { InterestRequest } from '../../entities/interest-request.entity';
 import { Match } from '../../entities/match.entity';
 import { MatchRead } from '../../entities/match-read.entity';
 import { InterestRequestRead } from '../../entities/interest-request-read.entity';
+import { calculateAge } from '../../utils/age.util';
 
 @Injectable()
 export class UnifiedNotificationsService {
@@ -217,8 +218,34 @@ export class UnifiedNotificationsService {
       .take(limit)
       .getMany();
 
+    // Format interest requests with basic ad details
+    const formattedInterestRequests = interestRequests.map(
+      (interestRequest) => {
+        const fromAd = interestRequest.fromAd;
+        const fromUser = interestRequest.fromUser;
+
+        return {
+          ...interestRequest,
+          fromAd: {
+            id: fromAd.id,
+            type: fromAd.type,
+            name: fromUser.name || null,
+            age: fromAd.birthday ? calculateAge(fromAd.birthday as Date) : null,
+            location: fromAd.location,
+            profession: fromAd.profession,
+            photos: fromAd.photos || [],
+          },
+          fromUser: {
+            id: fromUser.id,
+            firebaseUserId: fromUser.firebaseUserId,
+            name: fromUser.name || null,
+          },
+        };
+      },
+    );
+
     return {
-      interestRequests,
+      interestRequests: formattedInterestRequests,
       pagination: {
         page,
         limit,
@@ -256,8 +283,46 @@ export class UnifiedNotificationsService {
       .take(limit)
       .getMany();
 
+    // Format matches with basic ad details
+    const formattedMatches = matches.map((match) => {
+      const user1 = match.user1;
+      const user2 = match.user2;
+      const ad1 = match.ad1;
+      const ad2 = match.ad2;
+
+      return {
+        ...match,
+        user1: {
+          id: user1.id,
+          firebaseUserId: user1.firebaseUserId,
+          name: user1.name || null,
+        },
+        user2: {
+          id: user2.id,
+          firebaseUserId: user2.firebaseUserId,
+          name: user2.name || null,
+        },
+        ad1: {
+          id: ad1.id,
+          type: ad1.type,
+          name: user1.name || null,
+          age: ad1.birthday ? calculateAge(ad1.birthday as Date) : null,
+          location: ad1.location,
+          profession: ad1.profession,
+        },
+        ad2: {
+          id: ad2.id,
+          type: ad2.type,
+          name: user2.name || null,
+          age: ad2.birthday ? calculateAge(ad2.birthday as Date) : null,
+          location: ad2.location,
+          profession: ad2.profession,
+        },
+      };
+    });
+
     return {
-      matches,
+      matches: formattedMatches,
       pagination: {
         page,
         limit,
@@ -407,6 +472,93 @@ export class UnifiedNotificationsService {
     return {
       success: true,
       affected: readRecords.length,
+    };
+  }
+
+  async getSentInterests(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+    includeRead: boolean = false,
+  ) {
+    const query = this.interestRequestRepository
+      .createQueryBuilder('interestRequest')
+      .leftJoinAndSelect('interestRequest.toUser', 'toUser')
+      .leftJoinAndSelect('interestRequest.toAd', 'toAd')
+      .leftJoinAndSelect('toAd.photos', 'photos')
+      .where('interestRequest.fromUserId = :userId', { userId });
+
+    if (!includeRead) {
+      // For sent interests, we need to check if the recipient has read the interest request
+      query
+        .leftJoin(
+          'interest_request_reads',
+          'irr',
+          'irr.interestRequestId = interestRequest.id AND irr.userId = interestRequest.toUserId',
+        )
+        .andWhere('irr.id IS NULL');
+    }
+
+    const total = await query.getCount();
+
+    const sentInterests = await query
+      .orderBy('interestRequest.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    // Get read status for each sent interest
+    const interestRequestIds = sentInterests.map((ir) => ir.id);
+    const readStatuses = await this.interestRequestReadRepository
+      .createQueryBuilder('irr')
+      .select(['irr.interestRequestId', 'irr.readAt'])
+      .where('irr.interestRequestId IN (:...ids)', { ids: interestRequestIds })
+      .andWhere('irr.userId IN (:...recipientIds)', {
+        recipientIds: sentInterests.map((ir) => ir.toUserId),
+      })
+      .getRawMany();
+
+    const readStatusMap = new Map(
+      readStatuses.map((r: any) => [
+        r.irr_interestRequestId,
+        { isRead: true, readAt: r.irr_readAt },
+      ]),
+    );
+
+    // Format sent interests with basic ad details and read status
+    const sentInterestsWithReadStatus = sentInterests.map((interest) => {
+      const toAd = interest.toAd;
+      const toUser = interest.toUser;
+
+      return {
+        ...interest,
+        isRead: readStatusMap.has(interest.id),
+        readAt: readStatusMap.get(interest.id)?.readAt || null,
+        toAd: {
+          id: toAd.id,
+          type: toAd.type,
+          name: toUser.name || null,
+          age: toAd.birthday ? calculateAge(toAd.birthday as Date) : null,
+          location: toAd.location,
+          profession: toAd.profession,
+          photos: toAd.photos || [],
+        },
+        toUser: {
+          id: toUser.id,
+          firebaseUserId: toUser.firebaseUserId,
+          name: toUser.name || null,
+        },
+      };
+    });
+
+    return {
+      sentInterests: sentInterestsWithReadStatus,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 }

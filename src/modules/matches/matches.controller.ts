@@ -201,6 +201,23 @@ export class MatchesController {
     };
   }
 
+  @Get('interests/sent')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getSentInterests(
+    @Query() query: GetMyMatchesQueryDto,
+    @CurrentUserId() userId: string,
+  ): Promise<ApiResponse<any>> {
+    const result = await this.matchesService.getSentInterests(
+      userId,
+      query.page,
+      query.limit,
+    );
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
   @Get('interests/:interestId')
   async getInterestRequest(
     @Param('interestId') interestId: string,

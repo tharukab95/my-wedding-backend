@@ -268,6 +268,69 @@ export class MatchesService {
     };
   }
 
+  async getSentInterests(userId: string, page: number = 1, limit: number = 20) {
+    // Find user's ad
+    const userAd = await this.matrimonialAdRepository.findOne({
+      where: { userId },
+    });
+
+    if (!userAd) {
+      throw new NotFoundException({
+        code: ErrorCodes.AD_NOT_FOUND,
+        message: 'User has no matrimonial ad',
+      });
+    }
+
+    const query = this.interestRequestRepository
+      .createQueryBuilder('interestRequest')
+      .leftJoinAndSelect('interestRequest.toUser', 'toUser')
+      .leftJoinAndSelect('interestRequest.toAd', 'toAd')
+      .leftJoinAndSelect('toAd.photos', 'photos')
+      .where('interestRequest.fromUserId = :userId', { userId })
+      .orderBy('interestRequest.createdAt', 'DESC');
+
+    const total = await query.getCount();
+
+    const interests = await query
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    const formattedInterests = interests.map((interestRequest) => {
+      return {
+        interestId: interestRequest.id,
+        toUser: {
+          id: (interestRequest.toUser as User).id,
+          firebaseUserId: (interestRequest.toUser as User).firebaseUserId,
+        },
+        ad: {
+          id: (interestRequest.toAd as MatrimonialAd).id,
+          type: (interestRequest.toAd as MatrimonialAd).type,
+          age: calculateAge((interestRequest.toAd as MatrimonialAd).birthday),
+          profession: (interestRequest.toAd as MatrimonialAd).profession,
+          location: (interestRequest.toAd as MatrimonialAd).location,
+        },
+        message: interestRequest.message,
+        compatibilityScore: interestRequest.compatibilityScore,
+        porondamScore: interestRequest.porondamScore,
+        status: interestRequest.status,
+        createdAt: interestRequest.createdAt,
+        respondedAt: interestRequest.respondedAt,
+        expiresAt: interestRequest.expiresAt,
+      };
+    });
+
+    return {
+      interests: formattedInterests,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   async respondToInterest(interestId: string, status: 'accepted' | 'rejected') {
     const interestRequest = await this.interestRequestRepository.findOne({
       where: { id: interestId },

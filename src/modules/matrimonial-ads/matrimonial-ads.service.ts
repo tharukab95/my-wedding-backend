@@ -188,6 +188,13 @@ export class MatrimonialAdsService {
           updateData.isSmoking =
             data.smoking === 'yes' || data.smoking === true;
         }
+
+        // Update user name if provided in phase 2
+        if (data.name) {
+          await this.userRepository.update(matrimonialAd.userId, {
+            name: data.name as string,
+          });
+        }
         break;
       case 3:
         if (data.fatherProfession)
@@ -637,7 +644,7 @@ export class MatrimonialAdsService {
       isPaid,
       needsPayment,
       status: matrimonialAd.status,
-      submittedAt: matrimonialAd.submittedAt,
+      submittedAt: matrimonialAd.submittedAt ?? undefined,
     };
   }
 
@@ -830,6 +837,7 @@ export class MatrimonialAdsService {
         return {
           adId: ad.id,
           userId: ad.userId,
+          name: ad.name,
           type: ad.type,
           age: calculateAge(ad.birthday),
           birthday: ad.birthday,
@@ -847,6 +855,7 @@ export class MatrimonialAdsService {
           isSmoking: ad.isSmoking,
           photosCount: ad.photosCount,
           hasHoroscope: ad.hasHoroscope,
+          assets: ad.assets,
           profilePhoto: profilePhoto?.filePath,
           compatibilityScore,
           relevanceScore,
