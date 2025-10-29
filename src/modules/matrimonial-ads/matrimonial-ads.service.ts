@@ -14,6 +14,7 @@ import { MatrimonialAd } from '../../entities/matrimonial-ad.entity';
 import { User } from '../../entities/user.entity';
 import { AdPhoto } from '../../entities/ad-photo.entity';
 import { AdHoroscope } from '../../entities/ad-horoscope.entity';
+import { AdContactDetails } from '../../entities/ad-contact-details.entity';
 // PreferredProfession and PreferredHabit entities removed - now using LookingForPreferences
 import { LookingForPreferences } from '../../entities/looking-for-preferences.entity';
 import { InterestRequest } from '../../entities/interest-request.entity';
@@ -32,6 +33,8 @@ export class MatrimonialAdsService {
     private adPhotoRepository: Repository<AdPhoto>,
     @InjectRepository(AdHoroscope)
     private adHoroscopeRepository: Repository<AdHoroscope>,
+    @InjectRepository(AdContactDetails)
+    private adContactDetailsRepository: Repository<AdContactDetails>,
     // PreferredProfession and PreferredHabit repositories removed - now using LookingForPreferences
     @InjectRepository(LookingForPreferences)
     private lookingForPreferencesRepository: Repository<LookingForPreferences>,
@@ -127,6 +130,249 @@ export class MatrimonialAdsService {
     return error?.code === '23505' && error?.constraint === constraintName;
   }
 
+  /**
+   * Validates Phase 1 data
+   */
+  private validatePhase1(data: Record<string, any>): void {
+    if (!data.advertiserType) {
+      throw new BadRequestException({
+        code: ErrorCodes.VALIDATION_ERROR,
+        message: 'Phase 1 validation failed: advertiserType is required',
+        details: {
+          phase: 1,
+          missingFields: ['advertiserType'],
+        },
+      });
+    }
+
+    const validTypes = ['self', 'parent', 'guardian'];
+    if (!validTypes.includes(data.advertiserType)) {
+      throw new BadRequestException({
+        code: ErrorCodes.VALIDATION_ERROR,
+        message: `Phase 1 validation failed: advertiserType must be one of: ${validTypes.join(', ')}`,
+        details: {
+          phase: 1,
+          invalidField: 'advertiserType',
+          value: data.advertiserType,
+        },
+      });
+    }
+  }
+
+  /**
+   * Validates Phase 2 data
+   */
+  private validatePhase2(data: Record<string, any>): void {
+    const requiredFields = [
+      'name',
+      'type',
+      'email',
+      'phone',
+      'birthday',
+      'age',
+      'profession',
+      'height',
+      'caste',
+      'religion',
+      'ethnicity',
+      'maritalStatus',
+      'location',
+      'education',
+      'drinking',
+      'smoking',
+      'skinColor',
+    ];
+
+    const missingFields: string[] = [];
+
+    for (const field of requiredFields) {
+      if (
+        data[field] === undefined ||
+        data[field] === null ||
+        data[field] === ''
+      ) {
+        missingFields.push(field);
+      }
+    }
+
+    if (missingFields.length > 0) {
+      throw new BadRequestException({
+        code: ErrorCodes.VALIDATION_ERROR,
+        message: `Phase 2 validation failed: Missing required fields: ${missingFields.join(', ')}`,
+        details: {
+          phase: 2,
+          missingFields,
+        },
+      });
+    }
+
+    // Validate type enum
+    if (!['bride', 'groom'].includes(data.type)) {
+      throw new BadRequestException({
+        code: ErrorCodes.VALIDATION_ERROR,
+        message:
+          'Phase 2 validation failed: type must be either "bride" or "groom"',
+        details: {
+          phase: 2,
+          invalidField: 'type',
+          value: data.type,
+        },
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(data.email)) {
+      throw new BadRequestException({
+        code: ErrorCodes.VALIDATION_ERROR,
+        message: 'Phase 2 validation failed: Invalid email format',
+        details: {
+          phase: 2,
+          invalidField: 'email',
+          value: data.email,
+        },
+      });
+    }
+
+    // Validate birthday format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(data.birthday)) {
+      throw new BadRequestException({
+        code: ErrorCodes.VALIDATION_ERROR,
+        message:
+          'Phase 2 validation failed: birthday must be in YYYY-MM-DD format',
+        details: {
+          phase: 2,
+          invalidField: 'birthday',
+          value: data.birthday,
+        },
+      });
+    }
+
+    // Validate age is a number
+    if (typeof data.age !== 'number' || data.age < 18 || data.age > 100) {
+      throw new BadRequestException({
+        code: ErrorCodes.VALIDATION_ERROR,
+        message:
+          'Phase 2 validation failed: age must be a number between 18 and 100',
+        details: {
+          phase: 2,
+          invalidField: 'age',
+          value: data.age,
+        },
+      });
+    }
+  }
+
+  /**
+   * Validates Phase 3 data
+   */
+  private validatePhase3(data: Record<string, any>): void {
+    const requiredFields = [
+      'fatherProfession',
+      'motherProfession',
+      'familyStatus',
+    ];
+
+    const missingFields: string[] = [];
+
+    for (const field of requiredFields) {
+      if (
+        data[field] === undefined ||
+        data[field] === null ||
+        data[field] === ''
+      ) {
+        missingFields.push(field);
+      }
+    }
+
+    if (missingFields.length > 0) {
+      throw new BadRequestException({
+        code: ErrorCodes.VALIDATION_ERROR,
+        message: `Phase 3 validation failed: Missing required fields: ${missingFields.join(', ')}`,
+        details: {
+          phase: 3,
+          missingFields,
+        },
+      });
+    }
+
+    // Validate siblings object
+    if (!data.siblings || typeof data.siblings !== 'object') {
+      throw new BadRequestException({
+        code: ErrorCodes.VALIDATION_ERROR,
+        message: 'Phase 3 validation failed: siblings object is required',
+        details: {
+          phase: 3,
+          missingFields: ['siblings'],
+        },
+      });
+    }
+
+    const siblings = data.siblings as { brothers?: number; sisters?: number };
+    if (
+      siblings.brothers === undefined ||
+      siblings.sisters === undefined ||
+      typeof siblings.brothers !== 'number' ||
+      typeof siblings.sisters !== 'number' ||
+      siblings.brothers < 0 ||
+      siblings.sisters < 0
+    ) {
+      throw new BadRequestException({
+        code: ErrorCodes.VALIDATION_ERROR,
+        message:
+          'Phase 3 validation failed: siblings.brothers and siblings.sisters must be non-negative numbers',
+        details: {
+          phase: 3,
+          invalidField: 'siblings',
+          value: data.siblings,
+        },
+      });
+    }
+  }
+
+  /**
+   * Validates Phase 6 data (Assets/Possessions)
+   */
+  private validatePhase6(data: Record<string, any>): void {
+    // Assets/Possessions are optional, but if provided, should be an array of strings
+    const assetsData = data.possessions || data.assets;
+    if (assetsData !== undefined && assetsData !== null) {
+      if (!Array.isArray(assetsData)) {
+        throw new BadRequestException({
+          code: ErrorCodes.VALIDATION_ERROR,
+          message:
+            'Phase 6 validation failed: possessions/assets must be an array',
+          details: {
+            phase: 6,
+            invalidField: 'possessions',
+            value: assetsData,
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Validates Phase 7 data (Partner Preferences)
+   */
+  private validatePhase7(data: Record<string, any>): void {
+    // Partner preferences are all optional, but if lookingFor is provided, validate structure
+    if (data.lookingFor !== undefined && data.lookingFor !== null) {
+      if (typeof data.lookingFor !== 'object') {
+        throw new BadRequestException({
+          code: ErrorCodes.VALIDATION_ERROR,
+          message: 'Phase 7 validation failed: lookingFor must be an object',
+          details: {
+            phase: 7,
+            invalidField: 'lookingFor',
+            value: data.lookingFor,
+          },
+        });
+      }
+    }
+  }
+
   async savePhaseData(adId: string, phase: number, data: Record<string, any>) {
     const matrimonialAd = await this.matrimonialAdRepository.findOne({
       where: { id: adId },
@@ -146,48 +392,65 @@ export class MatrimonialAdsService {
       });
     }
 
+    // Validate phase data before processing
+    switch (phase) {
+      case 1:
+        this.validatePhase1(data);
+        break;
+      case 2:
+        this.validatePhase2(data);
+        break;
+      case 3:
+        this.validatePhase3(data);
+        break;
+      case 6:
+        this.validatePhase6(data);
+        break;
+      case 7:
+        this.validatePhase7(data);
+        break;
+      // Phase 4 and 5 don't need validation as they're file uploads handled separately
+      default:
+        break;
+    }
+
     // Update phase data based on phase number
     const updateData: Partial<MatrimonialAd> = { currentPhase: phase };
 
     switch (phase) {
       case 1:
-        if (data.advertiserType) {
-          updateData.advertiserType = data.advertiserType as
-            | 'self'
-            | 'parent'
-            | 'guardian';
-        }
+        updateData.advertiserType = data.advertiserType as
+          | 'self'
+          | 'parent'
+          | 'guardian';
         break;
       case 2:
-        if (data.type) updateData.type = data.type as 'bride' | 'groom';
-        if (data.birthday && typeof data.birthday === 'string') {
-          updateData.birthday = new Date(data.birthday);
-        }
-        if (data.birthTime) updateData.birthTime = data.birthTime as string;
-        if (data.profession) updateData.profession = data.profession as string;
-        if (data.height) updateData.height = data.height as string;
-        if (data.caste) updateData.caste = data.caste as string;
-        if (data.religion) updateData.religion = data.religion as string;
-        if (data.ethnicity) updateData.ethnicity = data.ethnicity as string;
-        if (data.maritalStatus)
-          updateData.maritalStatus = data.maritalStatus as string;
+        // Update all Phase 2 fields
+        updateData.type = data.type as 'bride' | 'groom';
+        updateData.name = data.name as string;
+        updateData.birthday = new Date(data.birthday);
+        updateData.birthTime = data.birthTime as string;
+        updateData.profession = data.profession as string;
+        updateData.height = data.height as string;
+        updateData.caste = data.caste as string;
+        updateData.religion = data.religion as string;
+        updateData.ethnicity = data.ethnicity as string;
+        updateData.maritalStatus = data.maritalStatus as string;
         if (data.hasChildren)
           updateData.hasChildren = data.hasChildren as string;
-        if (data.location) updateData.location = data.location as string;
-        if (data.education) updateData.education = data.education as string;
-        if (data.languages) updateData.languages = data.languages as string[];
-        if (data.hobbies) updateData.hobbies = data.hobbies as string[];
+        updateData.location = data.location as string;
+        updateData.education = data.education as string;
+        updateData.languages = data.languages || [];
+        updateData.hobbies = data.hobbies || [];
 
         // Additional Phase 2 fields
-        if (data.skinColor) updateData.skinColor = data.skinColor as string;
-        if (data.drinking !== undefined) {
-          updateData.isDrinking =
-            data.drinking === 'yes' || data.drinking === true;
-        }
-        if (data.smoking !== undefined) {
-          updateData.isSmoking =
-            data.smoking === 'yes' || data.smoking === true;
-        }
+        updateData.skinColor = data.skinColor as string;
+        // Handle drinking/smoking - they come as strings but stored as booleans
+        updateData.isDrinking =
+          data.drinking === 'yes' ||
+          data.drinking === true ||
+          data.drinking === 'socially';
+        updateData.isSmoking = data.smoking === 'yes' || data.smoking === true;
 
         // Update user name if provided in phase 2
         if (data.name) {
@@ -195,30 +458,56 @@ export class MatrimonialAdsService {
             name: data.name as string,
           });
         }
+
+        // Save email and phone to AdContactDetails entity
+        {
+          let contactDetails = await this.adContactDetailsRepository.findOne({
+            where: { matrimonialAdId: adId },
+          });
+
+          if (contactDetails) {
+            await this.adContactDetailsRepository.update(contactDetails.id, {
+              email: data.email as string,
+              phone: data.phone as string,
+            });
+          } else {
+            contactDetails = this.adContactDetailsRepository.create({
+              matrimonialAdId: adId,
+              email: data.email as string,
+              phone: data.phone as string,
+            });
+            await this.adContactDetailsRepository.save(contactDetails);
+          }
+        }
         break;
       case 3:
-        if (data.fatherProfession)
-          updateData.fatherProfession = data.fatherProfession as string;
-        if (data.motherProfession)
-          updateData.motherProfession = data.motherProfession as string;
-        if (data.familyStatus)
-          updateData.familyStatus = data.familyStatus as string;
+        // Update all Phase 3 fields
+        updateData.fatherProfession = data.fatherProfession as string;
+        updateData.motherProfession = data.motherProfession as string;
+        updateData.familyStatus = data.familyStatus as string;
 
         // Handle siblings data
-        if (data.siblings) {
+        {
           const siblingsData = data.siblings as {
-            brothers?: number;
-            sisters?: number;
+            brothers: number;
+            sisters: number;
           };
-          if (siblingsData.brothers !== undefined)
-            updateData.brothersCount = siblingsData.brothers;
-          if (siblingsData.sisters !== undefined)
-            updateData.sistersCount = siblingsData.sisters;
+          updateData.brothersCount = siblingsData.brothers;
+          updateData.sistersCount = siblingsData.sisters;
         }
-
         break;
       case 6:
-        // Handle looking for preferences
+        // Phase 6: Assets/Possessions (optional)
+        // Accept both 'assets' and 'possessions' field names for compatibility
+        {
+          const assetsData = data.possessions || data.assets;
+          if (assetsData) {
+            updateData.assets = assetsData as string[];
+          }
+        }
+        break;
+      case 7:
+        // Phase 7: Partner Preferences (optional)
         if (data.lookingFor) {
           const lookingForData = data.lookingFor as {
             migrationPlans?: string;
@@ -226,9 +515,21 @@ export class MatrimonialAdsService {
             minAge?: string;
             maxAge?: string;
             education?: string;
-            profession?: string[];
-            habits?: string[];
+            profession?: string[] | string;
+            habits?: string[] | string;
           };
+
+          // Normalize profession and habits to arrays
+          const professionArray = Array.isArray(lookingForData.profession)
+            ? lookingForData.profession
+            : lookingForData.profession
+              ? [lookingForData.profession]
+              : null;
+          const habitsArray = Array.isArray(lookingForData.habits)
+            ? lookingForData.habits
+            : lookingForData.habits
+              ? [lookingForData.habits]
+              : null;
 
           // Check if preferences already exist
           let preferences = await this.lookingForPreferencesRepository.findOne({
@@ -243,8 +544,8 @@ export class MatrimonialAdsService {
               minAge: lookingForData.minAge || null,
               maxAge: lookingForData.maxAge || null,
               preferredEducation: lookingForData.education || null,
-              preferredProfessions: lookingForData.profession || null,
-              preferredHabits: lookingForData.habits || null,
+              preferredProfessions: professionArray,
+              preferredHabits: habitsArray,
             });
           } else {
             // Create new preferences
@@ -255,16 +556,11 @@ export class MatrimonialAdsService {
               minAge: lookingForData.minAge || null,
               maxAge: lookingForData.maxAge || null,
               preferredEducation: lookingForData.education || null,
-              preferredProfessions: lookingForData.profession || null,
-              preferredHabits: lookingForData.habits || null,
+              preferredProfessions: professionArray,
+              preferredHabits: habitsArray,
             });
             await this.lookingForPreferencesRepository.save(preferences);
           }
-        }
-        break;
-      case 7:
-        if (data.assets) {
-          updateData.assets = data.assets as string[];
         }
         break;
     }
@@ -305,6 +601,17 @@ export class MatrimonialAdsService {
     const photos: AdPhoto[] = [];
     let displayOrder = 0;
 
+    // Get existing photos count to set correct displayOrder
+    const existingPhotos = await this.adPhotoRepository.find({
+      where: { matrimonialAdId: adId },
+      order: { displayOrder: 'DESC' },
+      take: 1,
+    });
+
+    if (existingPhotos.length > 0) {
+      displayOrder = existingPhotos[0].displayOrder + 1;
+    }
+
     for (const file of files) {
       const photo = this.adPhotoRepository.create({
         matrimonialAdId: adId,
@@ -321,14 +628,18 @@ export class MatrimonialAdsService {
       displayOrder++;
     }
 
-    // Update photos count
+    // Update photos count - count all photos for this ad
+    const totalPhotos = await this.adPhotoRepository.count({
+      where: { matrimonialAdId: adId },
+    });
+
     await this.matrimonialAdRepository.update(adId, {
-      photosCount: photos.length,
+      photosCount: totalPhotos,
     });
 
     return {
       adId,
-      photosCount: photos.length,
+      photosCount: totalPhotos,
       photos,
     };
   }
@@ -415,10 +726,14 @@ export class MatrimonialAdsService {
         hasHoroscope: matrimonialAd.hasHoroscope,
       },
       6: {
+        completed: !!matrimonialAd.assets && matrimonialAd.assets.length > 0,
+        hasData: !!matrimonialAd.assets && matrimonialAd.assets.length > 0,
+        assets: matrimonialAd.assets || [],
+      },
+      7: {
         completed: !!matrimonialAd.lookingForPreferences,
         hasData: !!matrimonialAd.lookingForPreferences,
       },
-      // Phase 7 (assets) is not implemented yet, so we skip it
     };
 
     const isSubmitted = !!matrimonialAd.submittedAt;
@@ -478,6 +793,152 @@ export class MatrimonialAdsService {
 
     return {
       ...matrimonialAd,
+      age: calculateAge(matrimonialAd.birthday),
+      lookingFor,
+    };
+  }
+
+  async getMyAdDetails(firebaseUserId: string) {
+    // Find user by firebaseUserId
+    const user = await this.userRepository.findOne({
+      where: { firebaseUserId },
+    });
+
+    if (!user) {
+      throw new NotFoundException({
+        code: ErrorCodes.USER_NOT_FOUND,
+        message: 'User not found',
+      });
+    }
+
+    // Find user's matrimonial ad with all relations
+    const matrimonialAd = await this.matrimonialAdRepository.findOne({
+      where: { userId: user.id },
+      relations: [
+        'photos',
+        'horoscope',
+        'contactDetails',
+        'lookingForPreferences',
+      ],
+    });
+
+    if (!matrimonialAd) {
+      throw new NotFoundException({
+        code: ErrorCodes.AD_NOT_FOUND,
+        message: 'Matrimonial ad not found for this user',
+      });
+    }
+
+    // Sort photos by displayOrder
+    if (matrimonialAd.photos) {
+      matrimonialAd.photos.sort(
+        (a: any, b: any) => a.displayOrder - b.displayOrder,
+      );
+    }
+
+    // Format photos with URLs
+    const photoUrls = matrimonialAd.photos
+      ? matrimonialAd.photos.map((photo: any) => ({
+          id: photo.id,
+          url: photo.filePath.startsWith('http')
+            ? photo.filePath
+            : `/api/${photo.filePath.replace(/^\.\//, '')}`,
+          fileName: photo.fileName,
+          fileSize: photo.fileSize,
+          mimeType: photo.mimeType,
+          displayOrder: photo.displayOrder,
+          isProfilePhoto: photo.isProfilePhoto,
+          createdAt: photo.createdAt,
+        }))
+      : [];
+
+    // Format horoscope with URL
+    const horoscopeUrl = matrimonialAd.horoscope
+      ? {
+          id: matrimonialAd.horoscope.id,
+          url: matrimonialAd.horoscope.filePath.startsWith('http')
+            ? matrimonialAd.horoscope.filePath
+            : `/api/${matrimonialAd.horoscope.filePath.replace(/^\.\//, '')}`,
+          fileName: matrimonialAd.horoscope.fileName,
+          fileSize: matrimonialAd.horoscope.fileSize,
+          mimeType: matrimonialAd.horoscope.mimeType,
+          createdAt: matrimonialAd.horoscope.createdAt,
+        }
+      : null;
+
+    // Format contact details (only for own ad)
+    const contactDetails = matrimonialAd.contactDetails
+      ? {
+          email: matrimonialAd.contactDetails.email,
+          phone: matrimonialAd.contactDetails.phone,
+        }
+      : null;
+
+    // Format looking for preferences
+    const lookingFor = matrimonialAd.lookingForPreferences
+      ? {
+          migrationPlans: matrimonialAd.lookingForPreferences.migrationPlans as
+            | string
+            | null,
+          skinTone: matrimonialAd.lookingForPreferences.skinTone as
+            | string
+            | null,
+          minAge: matrimonialAd.lookingForPreferences.minAge as string | null,
+          maxAge: matrimonialAd.lookingForPreferences.maxAge as string | null,
+          education: matrimonialAd.lookingForPreferences.preferredEducation as
+            | string
+            | null,
+          profession: matrimonialAd.lookingForPreferences
+            .preferredProfessions as string[] | null,
+          habits: matrimonialAd.lookingForPreferences.preferredHabits as
+            | string[]
+            | null,
+        }
+      : null;
+
+    return {
+      id: matrimonialAd.id,
+      userId: matrimonialAd.userId,
+      name: matrimonialAd.name,
+      type: matrimonialAd.type,
+      currentPhase: matrimonialAd.currentPhase,
+      status: matrimonialAd.status,
+      advertiserType: matrimonialAd.advertiserType,
+      birthday: matrimonialAd.birthday,
+      birthTime: matrimonialAd.birthTime,
+      age: calculateAge(matrimonialAd.birthday),
+      profession: matrimonialAd.profession,
+      height: matrimonialAd.height,
+      caste: matrimonialAd.caste,
+      religion: matrimonialAd.religion,
+      ethnicity: matrimonialAd.ethnicity,
+      maritalStatus: matrimonialAd.maritalStatus,
+      hasChildren: matrimonialAd.hasChildren,
+      location: matrimonialAd.location,
+      education: matrimonialAd.education,
+      languages: matrimonialAd.languages,
+      hobbies: matrimonialAd.hobbies,
+      skinColor: matrimonialAd.skinColor,
+      isDrinking: matrimonialAd.isDrinking,
+      isSmoking: matrimonialAd.isSmoking,
+      fatherProfession: matrimonialAd.fatherProfession,
+      motherProfession: matrimonialAd.motherProfession,
+      familyStatus: matrimonialAd.familyStatus,
+      brothersCount: matrimonialAd.brothersCount,
+      sistersCount: matrimonialAd.sistersCount,
+      photosCount: matrimonialAd.photosCount,
+      hasHoroscope: matrimonialAd.hasHoroscope,
+      assets: matrimonialAd.assets,
+      isBoosted: matrimonialAd.isBoosted,
+      boostedAt: matrimonialAd.boostedAt,
+      submittedAt: matrimonialAd.submittedAt,
+      expiresAt: matrimonialAd.expiresAt,
+      createdAt: matrimonialAd.createdAt,
+      updatedAt: matrimonialAd.updatedAt,
+      // Include URLs and contact details
+      photoUrls,
+      horoscopeUrl,
+      contactDetails,
       lookingFor,
     };
   }
@@ -522,9 +983,10 @@ export class MatrimonialAdsService {
       });
     }
 
-    // Check if all phases are completed (bypassing Phase 7 - assets for now)
+    // Check if all required phases are completed
+    // All 7 phases are required: Phase 6 = Assets, Phase 7 = Partner Preferences
     const status = await this.getAdStatus(firebaseUserId);
-    const requiredPhases = [1, 2, 3, 4, 5, 6]; // Skip phase 7 (assets) for now
+    const requiredPhases = [1, 2, 3, 4, 5, 6, 7]; // All phases are required
     const allRequiredPhasesCompleted = requiredPhases.every(
       (phaseNum) => status.phases[phaseNum]?.completed === true,
     );
@@ -581,14 +1043,15 @@ export class MatrimonialAdsService {
     }
 
     // Check if all required phases are completed
-    // const requiredPhases = [1, 2, 3, 4, 5, 6]; // Skip phase 7 (assets) for now
-
+    // All 7 phases are required: Phase 6 = Assets, Phase 7 = Partner Preferences
     const phase1Completed = !!matrimonialAd.advertiserType;
     const phase2Completed = !!matrimonialAd.type;
     const phase3Completed = !!matrimonialAd.fatherProfession;
     const phase4Completed = matrimonialAd.photosCount > 0;
     const phase5Completed = matrimonialAd.hasHoroscope;
-    const phase6Completed = !!matrimonialAd.lookingForPreferences;
+    const phase6Completed =
+      !!matrimonialAd.assets && matrimonialAd.assets.length > 0;
+    const phase7Completed = !!matrimonialAd.lookingForPreferences;
 
     return (
       phase1Completed &&
@@ -596,7 +1059,8 @@ export class MatrimonialAdsService {
       phase3Completed &&
       phase4Completed &&
       phase5Completed &&
-      phase6Completed
+      phase6Completed &&
+      phase7Completed
     );
   }
 
@@ -794,14 +1258,17 @@ export class MatrimonialAdsService {
       ads = await query
         .orderBy('ad.isBoosted', 'DESC') // Boosted ads first
         .addOrderBy('ad.boostedAt', 'DESC') // Recent boosts first
-        .addOrderBy('ad.submittedAt', 'DESC') // Recent ads
+        .addOrderBy('ad.submittedAt', 'DESC') // Recent submissions first
+        .addOrderBy('ad.createdAt', 'DESC') // Fallback to creation date
         .skip((page - 1) * limit)
         .take(limit)
         .getMany();
     } else {
       // Public access: Simple date-based sorting (recent first)
+      // Sort by submittedAt first, but use createdAt as fallback for NULL values
       ads = await query
-        .orderBy('ad.submittedAt', 'DESC') // Recent ads first
+        .orderBy('ad.submittedAt', 'DESC') // Recent submissions first
+        .addOrderBy('ad.createdAt', 'DESC') // Fallback to creation date (handles NULL submittedAt)
         .skip((page - 1) * limit)
         .take(limit)
         .getMany();

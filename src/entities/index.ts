@@ -3,6 +3,7 @@ export { User } from './user.entity';
 export { MatrimonialAd } from './matrimonial-ad.entity';
 export { AdPhoto } from './ad-photo.entity';
 export { AdHoroscope } from './ad-horoscope.entity';
+export { AdContactDetails } from './ad-contact-details.entity';
 // PreferredProfession and PreferredHabit entities removed - now using LookingForPreferences
 export { Match } from './match.entity';
 

@@ -10,7 +10,7 @@ export class DatabaseService implements OnModuleInit {
   async onModuleInit() {
     try {
       this.logger.log('Starting database initialization...');
-      
+
       // Check if database connection is established
       if (!this.dataSource.isInitialized) {
         await this.dataSource.initialize();

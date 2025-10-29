@@ -1,6 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddUserAdInteractionTable1758861000000 implements MigrationInterface {
+export class AddUserAdInteractionTable1758861000000
+  implements MigrationInterface
+{
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create user_ad_interactions table
     await queryRunner.query(`
@@ -66,17 +68,31 @@ export class AddUserAdInteractionTable1758861000000 implements MigrationInterfac
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop trigger and function
-    await queryRunner.query(`DROP TRIGGER IF EXISTS update_user_ad_interactions_updated_at ON "user_ad_interactions"`);
-    await queryRunner.query(`DROP FUNCTION IF EXISTS update_updated_at_column()`);
+    await queryRunner.query(
+      `DROP TRIGGER IF EXISTS update_user_ad_interactions_updated_at ON "user_ad_interactions"`,
+    );
+    await queryRunner.query(
+      `DROP FUNCTION IF EXISTS update_updated_at_column()`,
+    );
 
     // Drop indexes
-    await queryRunner.query(`DROP INDEX "IDX_user_ad_interactions_userId_createdAt"`);
-    await queryRunner.query(`DROP INDEX "IDX_user_ad_interactions_adId_interactionType"`);
-    await queryRunner.query(`DROP INDEX "IDX_user_ad_interactions_userId_interactionType"`);
+    await queryRunner.query(
+      `DROP INDEX "IDX_user_ad_interactions_userId_createdAt"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX "IDX_user_ad_interactions_adId_interactionType"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX "IDX_user_ad_interactions_userId_interactionType"`,
+    );
 
     // Drop foreign key constraints
-    await queryRunner.query(`ALTER TABLE "user_ad_interactions" DROP CONSTRAINT "FK_user_ad_interactions_ad"`);
-    await queryRunner.query(`ALTER TABLE "user_ad_interactions" DROP CONSTRAINT "FK_user_ad_interactions_user"`);
+    await queryRunner.query(
+      `ALTER TABLE "user_ad_interactions" DROP CONSTRAINT "FK_user_ad_interactions_ad"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "user_ad_interactions" DROP CONSTRAINT "FK_user_ad_interactions_user"`,
+    );
 
     // Drop table
     await queryRunner.query(`DROP TABLE "user_ad_interactions"`);

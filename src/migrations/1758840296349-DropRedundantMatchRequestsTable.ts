@@ -1,6 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class DropRedundantMatchRequestsTable1758840296349 implements MigrationInterface {
+export class DropRedundantMatchRequestsTable1758840296349
+  implements MigrationInterface
+{
   name = 'DropRedundantMatchRequestsTable1758840296349';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

@@ -213,6 +213,18 @@ export class MatrimonialAdsController {
     };
   }
 
+  @Get('my-ad')
+  @UseGuards(FirebaseAuthGuard)
+  async getMyAdDetails(
+    @User() user: AuthenticatedUser,
+  ): Promise<ApiResponse<any>> {
+    const result = await this.matrimonialAdsService.getMyAdDetails(user.uid);
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
   @Get(':adId')
   async getAdData(@Param('adId') adId: string): Promise<ApiResponse<any>> {
     const result = await this.matrimonialAdsService.getAdData(adId);

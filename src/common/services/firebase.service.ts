@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as admin from 'firebase-admin';
@@ -8,6 +9,7 @@ export class FirebaseService implements OnModuleInit {
 
   constructor(private configService: ConfigService) {}
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async onModuleInit() {
     try {
       // Initialize Firebase Admin SDK
@@ -114,6 +116,7 @@ export class FirebaseService implements OnModuleInit {
   }
 
   // Listen for user creation events
+  // eslint-disable-next-line @typescript-eslint/require-await
   async setupUserCreationListener() {
     if (!this.firebaseApp) {
       console.warn(

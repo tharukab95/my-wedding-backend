@@ -143,6 +143,9 @@ export class MatrimonialAd {
   @OneToOne('AdHoroscope', 'matrimonialAd')
   horoscope: any;
 
+  @OneToOne('AdContactDetails', 'matrimonialAd')
+  contactDetails: any;
+
   @OneToMany('Match', 'ad1')
   matchesAsAd1: any[];
 

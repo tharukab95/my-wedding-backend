@@ -9,12 +9,7 @@ import { PricingPlan, Payment, MatrimonialAd, User } from '../../entities';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      PricingPlan,
-      Payment,
-      MatrimonialAd,
-      User,
-    ]),
+    TypeOrmModule.forFeature([PricingPlan, Payment, MatrimonialAd, User]),
     ScheduleModule.forRoot(),
   ],
   controllers: [PaymentsController],

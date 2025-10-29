@@ -85,6 +85,10 @@ import {
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(UserResolverMiddleware).forRoutes('*');
+    // Apply middleware to all routes except static files
+    consumer
+      .apply(UserResolverMiddleware)
+      .exclude('uploads/(.*)') // Exclude static file routes
+      .forRoutes('*');
   }
 }
