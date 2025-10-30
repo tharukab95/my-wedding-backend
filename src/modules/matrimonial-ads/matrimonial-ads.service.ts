@@ -21,6 +21,7 @@ import { InterestRequest } from '../../entities/interest-request.entity';
 import { Match } from '../../entities/match.entity';
 import { ErrorCodes } from '../../dto/common.dto';
 import { calculateAge } from '../../utils/age.util';
+import { SseNotificationService } from '../../services/sse-notification.service';
 
 @Injectable()
 export class MatrimonialAdsService {
@@ -42,6 +43,7 @@ export class MatrimonialAdsService {
     private interestRequestRepository: Repository<InterestRequest>,
     @InjectRepository(Match)
     private matchRepository: Repository<Match>,
+    private sseNotificationService: SseNotificationService,
   ) {}
 
   async initializeMatrimonialAd(firebaseUserId: string, phoneNumber: string) {
@@ -1504,5 +1506,73 @@ export class MatrimonialAdsService {
     }
 
     return Math.max(0, score);
+  }
+
+  // Ad Status Management with Notifications
+  async updateAdStatus(adId: string, status: string, message?: string) {
+    const ad = await this.matrimonialAdRepository.findOne({
+      where: { id: adId },
+      relations: ['user'],
+    });
+
+    if (!ad) {
+      throw new NotFoundException({
+        code: ErrorCodes.AD_NOT_FOUND,
+        message: 'Ad not found',
+      });
+    }
+
+    await this.matrimonialAdRepository.update(adId, { status: status as any });
+
+    // Send SSE notification
+    try {
+      this.sseNotificationService.sendAdStatusChangeNotification(
+        ad.userId,
+        adId,
+        status,
+        message || `Your ad status has been updated to ${status}`,
+      );
+    } catch (error) {
+      console.error('Error sending ad status change notification:', error);
+    }
+
+    return {
+      success: true,
+      message: 'Ad status updated successfully',
+      adId,
+      status,
+    };
+  }
+
+  async activateAd(adId: string) {
+    return this.updateAdStatus(
+      adId,
+      'active',
+      'Your ad is now live and visible to other users!',
+    );
+  }
+
+  async deactivateAd(adId: string, reason?: string) {
+    return this.updateAdStatus(
+      adId,
+      'inactive',
+      reason || 'Your ad has been deactivated',
+    );
+  }
+
+  async rejectAd(adId: string, reason: string) {
+    return this.updateAdStatus(
+      adId,
+      'rejected',
+      `Your ad was rejected: ${reason}`,
+    );
+  }
+
+  async suspendAd(adId: string, reason: string) {
+    return this.updateAdStatus(
+      adId,
+      'suspended',
+      `Your ad has been suspended: ${reason}`,
+    );
   }
 }

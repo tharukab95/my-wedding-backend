@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Injectable,
   NotFoundException,
@@ -13,6 +16,7 @@ import { AdPhoto } from '../../entities/ad-photo.entity';
 import { ContactExchange } from '../../entities/contact-exchange.entity';
 import { ErrorCodes } from '../../dto/common.dto';
 import { calculateAge } from '../../utils/age.util';
+import { SseNotificationService } from '../../services/sse-notification.service';
 
 @Injectable()
 export class MatchesService {
@@ -29,6 +33,7 @@ export class MatchesService {
     private adPhotoRepository: Repository<AdPhoto>,
     @InjectRepository(ContactExchange)
     private contactExchangeRepository: Repository<ContactExchange>,
+    private sseNotificationService: SseNotificationService,
   ) {}
 
   async findMatches(adId: string, page: number = 1, limit: number = 20) {
@@ -192,6 +197,24 @@ export class MatchesService {
 
     const savedInterest =
       await this.interestRequestRepository.save(interestRequest);
+
+    // Send SSE notification to the recipient
+    try {
+      const interestWithRelations =
+        await this.interestRequestRepository.findOne({
+          where: { id: savedInterest.id },
+          relations: ['fromUser', 'fromAd'],
+        });
+
+      if (interestWithRelations) {
+        this.sseNotificationService.sendInterestRequestNotification(
+          ad.userId,
+          interestWithRelations,
+        );
+      }
+    } catch (error) {
+      console.error('Error sending interest request notification:', error);
+    }
 
     return {
       interestId: savedInterest.id,
@@ -386,6 +409,32 @@ export class MatchesService {
       contactExchange.isMutual = false; // Will be true when both parties agree
 
       await this.contactExchangeRepository.save(contactExchange);
+
+      // Send match created notifications to both users
+      try {
+        this.sseNotificationService.sendMatchCreatedNotification(
+          interestRequest.fromUserId,
+          interestRequest.toUserId,
+          savedMatch,
+        );
+      } catch (error) {
+        console.error('Error sending match created notification:', error);
+      }
+    }
+
+    // Send interest response notification to the sender
+    try {
+      this.sseNotificationService.sendInterestResponseNotification(
+        interestRequest.fromUserId,
+        {
+          interestId,
+          status,
+          respondedAt: new Date(),
+          matchId: status === 'accepted' ? matchId : null,
+        },
+      );
+    } catch (error) {
+      console.error('Error sending interest response notification:', error);
     }
 
     return {
@@ -703,8 +752,7 @@ export class MatchesService {
     }
 
     const ad = interestRequest.fromAd as MatrimonialAd;
-    const user = ad.user as User;
-    const horoscope = ad.horoscope;
+    const horoscope = ad.horoscope as any;
 
     return {
       id: interestRequest.id,

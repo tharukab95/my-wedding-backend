@@ -19,9 +19,9 @@ async function bootstrap() {
   // Files will be accessible at /api/uploads/photos/* and /api/uploads/horoscopes/*
   expressApp.use('/api/uploads', express.static(uploadsPath));
 
-  // Enable CORS
+  // Enable CORS (allow frontend at http://localhost:3001 with credentials)
   app.enableCors({
-    origin: true,
+    origin: ['http://localhost:3001'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -22,53 +23,6 @@ export class UnifiedNotificationsService {
     @InjectRepository(InterestRequestRead)
     private interestRequestReadRepository: Repository<InterestRequestRead>,
   ) {}
-
-  async getUnreadCounts(userId: string) {
-    // Get all interest requests for this user
-    const allInterestRequests = await this.interestRequestRepository.find({
-      where: { toUserId: userId },
-    });
-
-    // Get all matches for this user
-    const allMatches = await this.matchRepository.find({
-      where: [{ user1Id: userId }, { user2Id: userId }],
-    });
-
-    // Get read status for interest requests
-    const readInterestRequestIds = await this.interestRequestReadRepository
-      .createQueryBuilder('irr')
-      .select('irr.interestRequestId')
-      .where('irr.userId = :userId', { userId })
-      .getRawMany();
-
-    const readInterestRequestIdSet = new Set(
-      readInterestRequestIds.map((r) => r.irr_interestRequestId),
-    );
-
-    // Get read status for matches
-    const readMatchIds = await this.matchReadRepository
-      .createQueryBuilder('mr')
-      .select('mr.matchId')
-      .where('mr.userId = :userId', { userId })
-      .getRawMany();
-
-    const readMatchIdSet = new Set(readMatchIds.map((r: any) => r.mr_matchId));
-
-    // Count unread items
-    const unreadInterestRequests = allInterestRequests.filter(
-      (ir) => !readInterestRequestIdSet.has(ir.id),
-    ).length;
-
-    const unreadMatches = allMatches.filter(
-      (match) => !readMatchIdSet.has(match.id),
-    ).length;
-
-    return {
-      interestRequests: unreadInterestRequests,
-      matches: unreadMatches,
-      total: unreadInterestRequests + unreadMatches,
-    };
-  }
 
   async getUnifiedNotifications(
     userId: string,
@@ -560,5 +514,44 @@ export class UnifiedNotificationsService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async getUnreadCounts(userId: string) {
+    try {
+      // Unread interestRequests: to this user, and no entry in interest_request_reads for (interestRequestId, userId)
+      const unreadInterestRequestCount = await this.interestRequestRepository
+        .createQueryBuilder('ir')
+        .where('ir."toUserId" = :userId', { userId })
+        .andWhere(
+          (qb) =>
+            `NOT EXISTS (SELECT 1 FROM interest_request_reads irr WHERE irr."interestRequestId" = ir.id AND irr."userId" = :userId)`,
+        )
+        .setParameter('userId', userId)
+        .getCount();
+
+      // Unread matches: match involves user, and no entry in match_reads for (matchId, userId)
+      const unreadMatchCount = await this.matchRepository
+        .createQueryBuilder('m')
+        .where('(m."user1Id" = :userId OR m."user2Id" = :userId)', { userId })
+        .andWhere(
+          (qb) =>
+            `NOT EXISTS (SELECT 1 FROM match_reads mr WHERE mr."matchId" = m.id AND mr."userId" = :userId)`,
+        )
+        .setParameter('userId', userId)
+        .getCount();
+
+      return {
+        interestRequests: unreadInterestRequestCount,
+        matches: unreadMatchCount,
+        total: unreadInterestRequestCount + unreadMatchCount,
+      };
+    } catch (error) {
+      console.error('Error getting unread counts:', error);
+      return {
+        interestRequests: 0,
+        matches: 0,
+        total: 0,
+      };
+    }
   }
 }

@@ -13,6 +13,7 @@ import {
   InterestRequest,
   Match,
 } from '../../entities';
+import { SseModule } from '../sse/sse.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import {
       InterestRequest,
       Match,
     ]),
+    SseModule,
   ],
   controllers: [MatrimonialAdsController],
   providers: [MatrimonialAdsService, UserResolverService],

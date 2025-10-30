@@ -64,36 +64,6 @@ export class UnifiedNotificationsController {
     }
   }
 
-  @Get('unread-counts')
-  @UseGuards(FirebaseAuthGuard)
-  async getUnreadCounts(
-    @User() user: AuthenticatedUser,
-  ): Promise<ApiResponse<any>> {
-    try {
-      const resolvedUser = await this.userResolverService.findOrCreateUser(
-        user.uid,
-        user.phoneNumber,
-      );
-
-      const counts = await this.unifiedNotificationsService.getUnreadCounts(
-        resolvedUser.id,
-      );
-
-      return {
-        success: true,
-        data: counts,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: {
-          code: error.code || 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'An error occurred',
-        },
-      };
-    }
-  }
-
   @Get('interest-requests')
   @UseGuards(FirebaseAuthGuard)
   @UsePipes(new ValidationPipe({ transform: true }))
@@ -373,6 +343,34 @@ export class UnifiedNotificationsController {
       return {
         success: true,
         data: result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: error.code || 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'An error occurred',
+        },
+      };
+    }
+  }
+
+  @Get('counts')
+  @UseGuards(FirebaseAuthGuard)
+  async getUnreadCounts(@User() user: AuthenticatedUser) {
+    try {
+      const resolvedUser = await this.userResolverService.findOrCreateUser(
+        user.uid,
+        user.phoneNumber,
+      );
+      console.log('resolvedUser', resolvedUser.id);
+      const counts = await this.unifiedNotificationsService.getUnreadCounts(
+        resolvedUser.id,
+      );
+
+      return {
+        success: true,
+        data: counts,
       };
     } catch (error) {
       return {

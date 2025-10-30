@@ -13,6 +13,7 @@ import {
   ContactExchange,
   UserAdInteraction,
 } from '../../entities';
+import { SseModule } from '../sse/sse.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import {
       ContactExchange,
       UserAdInteraction,
     ]),
+    SseModule,
   ],
   controllers: [MatchesController],
   providers: [MatchesService, PersonalizedFeedService, UserResolverService],

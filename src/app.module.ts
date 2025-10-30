@@ -16,6 +16,7 @@ import { UsersModule } from './modules/users/users.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { UserResolverService } from './services/user-resolver.service';
 import { UserResolverMiddleware } from './middleware/user-resolver.middleware';
+import { SseModule } from './modules/sse/sse.module';
 import {
   User,
   MatrimonialAd,
@@ -61,6 +62,7 @@ import {
       Payment,
       Notification,
     ]),
+    SseModule,
     MatrimonialAdsModule,
     MatchesModule,
     NotificationsModule,
@@ -85,10 +87,9 @@ import {
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    // Apply middleware to all routes except static files
     consumer
       .apply(UserResolverMiddleware)
-      .exclude('uploads/(.*)') // Exclude static file routes
+      .exclude('uploads/(.*)')
       .forRoutes('*');
   }
 }
