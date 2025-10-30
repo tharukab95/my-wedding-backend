@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -288,6 +289,30 @@ export class MatchesController {
       success: true,
       data: result,
     };
+  }
+
+  @Get('matches/:matchId/partner-details')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getMatchedPartnerDetails(
+    @Param('matchId') matchId: string,
+    @CurrentUserId() userId: string,
+  ): Promise<ApiResponse<any>> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      const result = await this.matchesService.getMatchedPartnerDetails(
+        matchId,
+        userId,
+      );
+      return { success: true, data: result };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: error.code || 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'An error occurred',
+        },
+      };
+    }
   }
 
   // Contact Exchange Endpoints

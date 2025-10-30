@@ -147,56 +147,65 @@ export class UnifiedNotificationsService {
     limit: number = 20,
     includeRead: boolean = false,
   ) {
-    const whereCondition: any = { toUserId: userId };
-
-    if (!includeRead) {
-      whereCondition.isRead = false;
-    }
-
-    const query = this.interestRequestRepository
-      .createQueryBuilder('interestRequest')
-      .leftJoinAndSelect('interestRequest.fromUser', 'fromUser')
-      .leftJoinAndSelect('interestRequest.fromAd', 'fromAd')
+    const qb = this.interestRequestRepository
+      .createQueryBuilder('ir')
+      .leftJoinAndSelect('ir.fromUser', 'fromUser')
+      .leftJoinAndSelect('ir.fromAd', 'fromAd')
       .leftJoinAndSelect('fromAd.photos', 'photos')
-      .where('interestRequest.toUserId = :userId', { userId });
+      .leftJoin(
+        InterestRequestRead,
+        'irr',
+        'irr.interestRequestId = ir.id AND irr.userId = :userId',
+        { userId },
+      )
+      .addSelect(['irr.id', 'irr.readAt'])
+      .where('ir.toUserId = :userId', { userId });
 
     if (!includeRead) {
-      query.andWhere('interestRequest.isRead = false');
+      qb.andWhere('irr.id IS NULL');
     }
 
-    const total = await query.getCount();
+    const total = await qb.getCount();
 
-    const interestRequests = await query
-      .orderBy('interestRequest.createdAt', 'DESC')
+    const rows = await qb
+      .orderBy('ir.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
-      .getMany();
+      .getRawAndEntities();
 
-    // Format interest requests with basic ad details
-    const formattedInterestRequests = interestRequests.map(
-      (interestRequest) => {
-        const fromAd = interestRequest.fromAd;
-        const fromUser = interestRequest.fromUser;
-
-        return {
-          ...interestRequest,
-          fromAd: {
-            id: fromAd.id,
-            type: fromAd.type,
-            name: fromUser.name || null,
-            age: fromAd.birthday ? calculateAge(fromAd.birthday as Date) : null,
-            location: fromAd.location,
-            profession: fromAd.profession,
-            photos: fromAd.photos || [],
-          },
-          fromUser: {
-            id: fromUser.id,
-            firebaseUserId: fromUser.firebaseUserId,
-            name: fromUser.name || null,
-          },
-        };
-      },
-    );
+    const formattedInterestRequests = rows.entities.map((ir, idx) => {
+      const raw: any = rows.raw[idx] || {};
+      const isRead = Boolean(raw['irr_id']);
+      const readAt = raw['irr_readAt'] || null;
+      const fromAd = (ir as any).fromAd;
+      const fromUser = (ir as any).fromUser;
+      return {
+        id: ir.id,
+        status: (ir as any).status,
+        compatibilityScore: (ir as any).compatibilityScore,
+        porondamScore: (ir as any).porondamScore,
+        message: (ir as any).message,
+        createdAt: (ir as any).createdAt,
+        respondedAt: (ir as any).respondedAt,
+        expiresAt: (ir as any).expiresAt,
+        isRead,
+        readAt,
+        fromAd: {
+          id: fromAd.id,
+          type: fromAd.type,
+          name: fromUser.name || null,
+          age: fromAd.birthday ? calculateAge(fromAd.birthday as Date) : null,
+          location: fromAd.location,
+          profession: fromAd.profession,
+          photos: fromAd.photos || [],
+        },
+        fromUser: {
+          id: fromUser.id,
+          firebaseUserId: fromUser.firebaseUserId,
+          name: fromUser.name || null,
+        },
+      };
+    });
 
     return {
       interestRequests: formattedInterestRequests,
@@ -215,37 +224,40 @@ export class UnifiedNotificationsService {
     limit: number = 20,
     includeRead: boolean = false,
   ) {
-    const query = this.matchRepository
-      .createQueryBuilder('match')
-      .leftJoinAndSelect('match.user1', 'user1')
-      .leftJoinAndSelect('match.user2', 'user2')
-      .leftJoinAndSelect('match.ad1', 'ad1')
-      .leftJoinAndSelect('match.ad2', 'ad2')
-      .where('(match.user1Id = :userId OR match.user2Id = :userId)', {
+    const qb = this.matchRepository
+      .createQueryBuilder('m')
+      .leftJoinAndSelect('m.user1', 'user1')
+      .leftJoinAndSelect('m.user2', 'user2')
+      .leftJoinAndSelect('m.ad1', 'ad1')
+      .leftJoinAndSelect('m.ad2', 'ad2')
+      .leftJoin(MatchRead, 'mr', 'mr.matchId = m.id AND mr.userId = :userId', {
         userId,
-      });
+      })
+      .addSelect(['mr.id', 'mr.readAt'])
+      .where('(m.user1Id = :userId OR m.user2Id = :userId)', { userId });
 
     if (!includeRead) {
-      query.andWhere('match.isRead = false');
+      qb.andWhere('mr.id IS NULL');
     }
 
-    const total = await query.getCount();
+    const total = await qb.getCount();
 
-    const matches = await query
-      .orderBy('match.createdAt', 'DESC')
+    const rows = await qb
+      .orderBy('m.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
-      .getMany();
+      .getRawAndEntities();
 
-    // Format matches with basic ad details
-    const formattedMatches = matches.map((match) => {
-      const user1 = match.user1;
-      const user2 = match.user2;
-      const ad1 = match.ad1;
-      const ad2 = match.ad2;
-
+    const formattedMatches = rows.entities.map((match, idx) => {
+      const raw: any = rows.raw[idx] || {};
+      const isRead = Boolean(raw['mr_id']);
+      const readAt = raw['mr_readAt'] || null;
+      const user1 = (match as any).user1;
+      const user2 = (match as any).user2;
+      const ad1 = (match as any).ad1;
+      const ad2 = (match as any).ad2;
       return {
-        ...match,
+        id: match.id,
         user1: {
           id: user1.id,
           firebaseUserId: user1.firebaseUserId,
@@ -272,6 +284,12 @@ export class UnifiedNotificationsService {
           location: ad2.location,
           profession: ad2.profession,
         },
+        compatibilityScore: (match as any).compatibilityScore,
+        status: (match as any).status,
+        createdAt: (match as any).createdAt,
+        expiresAt: (match as any).expiresAt,
+        isRead,
+        readAt,
       };
     });
 
@@ -372,7 +390,7 @@ export class UnifiedNotificationsService {
     const unreadInterestRequests = await this.interestRequestRepository
       .createQueryBuilder('ir')
       .leftJoin(
-        'interest_request_reads',
+        InterestRequestRead,
         'irr',
         'irr.interestRequestId = ir.id AND irr.userId = :userId',
         { userId },
@@ -403,7 +421,7 @@ export class UnifiedNotificationsService {
     const unreadMatches = await this.matchRepository
       .createQueryBuilder('match')
       .leftJoin(
-        'match_reads',
+        MatchRead,
         'mr',
         'mr.matchId = match.id AND mr.userId = :userId',
         { userId },
@@ -446,7 +464,7 @@ export class UnifiedNotificationsService {
       // For sent interests, we need to check if the recipient has read the interest request
       query
         .leftJoin(
-          'interest_request_reads',
+          InterestRequestRead,
           'irr',
           'irr.interestRequestId = interestRequest.id AND irr.userId = interestRequest.toUserId',
         )

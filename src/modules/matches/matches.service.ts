@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -388,8 +389,8 @@ export class MatchesService {
         user2Id: interestRequest.toUserId,
         ad1Id: interestRequest.fromAdId,
         ad2Id: interestRequest.toAdId,
-        compatibilityScore: interestRequest.compatibilityScore,
-        status: 'pending',
+        compatibilityScore: Math.floor(Math.random() * 101),
+        status: 'accepted',
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       });
 
@@ -783,6 +784,167 @@ export class MatchesService {
             }
           : null,
       },
+    };
+  }
+
+  async getMatchedPartnerDetails(matchId: string, requesterUserId: string) {
+    const match = await this.matchRepository.findOne({
+      where: { id: matchId },
+    });
+    if (!match) {
+      throw new NotFoundException({
+        code: ErrorCodes.MATCH_NOT_FOUND,
+        message: 'Match not found',
+      });
+    }
+    if (
+      match.user1Id !== requesterUserId &&
+      match.user2Id !== requesterUserId
+    ) {
+      throw new BadRequestException({
+        code: ErrorCodes.UNAUTHORIZED,
+        message: 'Not part of this match',
+      });
+    }
+    if (match.status !== ('accepted' as any)) {
+      throw new BadRequestException({
+        code: ErrorCodes.UNAUTHORIZED,
+        message: 'Match is not active',
+      });
+    }
+
+    const partnerAdId =
+      match.user1Id === requesterUserId ? match.ad2Id : match.ad1Id;
+    const selfAdId =
+      match.user1Id === requesterUserId ? match.ad1Id : match.ad2Id;
+
+    const [partnerAd] = await Promise.all([
+      this.matrimonialAdRepository.findOne({
+        where: { id: partnerAdId },
+        relations: [
+          'photos',
+          'horoscope',
+          'contactDetails',
+          'lookingForPreferences',
+        ],
+      }),
+      this.matrimonialAdRepository.findOne({ where: { id: selfAdId } }),
+    ]);
+
+    if (!partnerAd) {
+      throw new NotFoundException({
+        code: ErrorCodes.AD_NOT_FOUND,
+        message: 'Partner ad not found',
+      });
+    }
+
+    if (partnerAd.photos) {
+      (partnerAd.photos as any[]).sort(
+        (a, b) => a.displayOrder - b.displayOrder,
+      );
+    }
+
+    const photoUrls = (partnerAd.photos || []).map((p: any) => ({
+      id: p.id,
+      url: p.filePath?.startsWith('http')
+        ? p.filePath
+        : `/api/${String(p.filePath || '').replace(/^\.\//, '')}`,
+      fileName: p.fileName,
+      fileSize: p.fileSize,
+      mimeType: p.mimeType,
+      displayOrder: p.displayOrder,
+      isProfilePhoto: p.isProfilePhoto,
+      createdAt: p.createdAt,
+    }));
+
+    const horoscopeUrl = partnerAd.horoscope
+      ? {
+          id: (partnerAd.horoscope as any).id,
+          url: (partnerAd.horoscope as any).filePath?.startsWith('http')
+            ? (partnerAd.horoscope as any).filePath
+            : `/api/${String((partnerAd.horoscope as any).filePath || '').replace(/^\.\//, '')}`,
+          fileName: (partnerAd.horoscope as any).fileName,
+          fileSize: (partnerAd.horoscope as any).fileSize,
+          mimeType: (partnerAd.horoscope as any).mimeType,
+          createdAt: (partnerAd.horoscope as any).createdAt,
+        }
+      : null;
+
+    const contactDetails = partnerAd.contactDetails
+      ? {
+          email: (partnerAd.contactDetails as any).email,
+          phone: (partnerAd.contactDetails as any).phone,
+        }
+      : null;
+
+    const lookingFor = partnerAd.lookingForPreferences
+      ? {
+          migrationPlans:
+            (partnerAd.lookingForPreferences as any).migrationPlans || null,
+          skinTone: (partnerAd.lookingForPreferences as any).skinTone || null,
+          minAge: (partnerAd.lookingForPreferences as any).minAge || null,
+          maxAge: (partnerAd.lookingForPreferences as any).maxAge || null,
+          education:
+            (partnerAd.lookingForPreferences as any).preferredEducation || null,
+          profession:
+            (partnerAd.lookingForPreferences as any).preferredProfessions ||
+            null,
+          habits:
+            (partnerAd.lookingForPreferences as any).preferredHabits || null,
+        }
+      : null;
+
+    const finalCompatibility = Math.floor(Math.random() * 101);
+
+    return {
+      matchId: match.id,
+      partnerAd: {
+        id: partnerAd.id,
+        userId: partnerAd.userId,
+        name: partnerAd.name,
+        type: partnerAd.type,
+        currentPhase: partnerAd.currentPhase,
+        status: partnerAd.status,
+        advertiserType: partnerAd.advertiserType,
+        birthday: partnerAd.birthday,
+        birthTime: partnerAd.birthTime,
+        age: calculateAge(partnerAd.birthday as Date),
+        profession: partnerAd.profession,
+        height: partnerAd.height,
+        caste: partnerAd.caste,
+        religion: partnerAd.religion,
+        ethnicity: partnerAd.ethnicity,
+        maritalStatus: partnerAd.maritalStatus,
+        hasChildren: partnerAd.hasChildren,
+        location: partnerAd.location,
+        education: partnerAd.education,
+        languages: partnerAd.languages,
+        hobbies: partnerAd.hobbies,
+        skinColor: partnerAd.skinColor,
+        isDrinking: partnerAd.isDrinking,
+        isSmoking: partnerAd.isSmoking,
+        fatherProfession: partnerAd.fatherProfession,
+        motherProfession: partnerAd.motherProfession,
+        familyStatus: partnerAd.familyStatus,
+        brothersCount: partnerAd.brothersCount,
+        sistersCount: partnerAd.sistersCount,
+        photosCount: partnerAd.photosCount,
+        hasHoroscope: partnerAd.hasHoroscope,
+        assets: partnerAd.assets,
+        isBoosted: partnerAd.isBoosted,
+        boostedAt: partnerAd.boostedAt,
+        submittedAt: partnerAd.submittedAt,
+        expiresAt: partnerAd.expiresAt,
+        createdAt: partnerAd.createdAt,
+        updatedAt: partnerAd.updatedAt,
+      },
+      photoUrls,
+      horoscopeUrl,
+      contactDetails,
+      lookingFor,
+      compatibilityScore: finalCompatibility,
+      matchCreatedAt: match.createdAt,
+      matchExpiresAt: match.expiresAt,
     };
   }
 }
