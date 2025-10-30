@@ -742,7 +742,7 @@ export class MatchesService {
   async getInterestRequest(interestId: string) {
     const interestRequest = await this.interestRequestRepository.findOne({
       where: { id: interestId },
-      relations: ['fromAd', 'fromAd.user', 'fromAd.horoscope'],
+      relations: ['fromAd', 'fromAd.user'],
     });
 
     if (!interestRequest) {
@@ -753,7 +753,6 @@ export class MatchesService {
     }
 
     const ad = interestRequest.fromAd as MatrimonialAd;
-    const horoscope = ad.horoscope as any;
 
     return {
       id: interestRequest.id,
@@ -764,25 +763,42 @@ export class MatchesService {
       ad: {
         id: ad.id,
         userId: ad.userId,
-        name: `${ad.type} - ${calculateAge(ad.birthday)} years`,
-        age: calculateAge(ad.birthday),
-        profession: ad.profession,
-        location: ad.location,
+        name: ad.name,
         type: ad.type,
-        maritalStatus: ad.maritalStatus,
+        currentPhase: ad.currentPhase,
+        status: ad.status,
+        advertiserType: ad.advertiserType,
+        birthday: ad.birthday,
+        birthTime: ad.birthTime,
+        age: ad.birthday ? calculateAge(ad.birthday as Date) : null,
+        profession: ad.profession,
         height: ad.height,
+        caste: ad.caste,
         religion: ad.religion,
+        ethnicity: ad.ethnicity,
+        maritalStatus: ad.maritalStatus,
+        hasChildren: ad.hasChildren,
+        location: ad.location,
         education: ad.education,
-        horoscope: horoscope
-          ? {
-              id: horoscope.id,
-              rashi: horoscope.rashi,
-              nakshatra: horoscope.nakshatra,
-              birthDate: horoscope.birthDate,
-              birthTime: horoscope.birthTime,
-              birthPlace: horoscope.birthPlace,
-            }
-          : null,
+        languages: ad.languages,
+        hobbies: ad.hobbies,
+        skinColor: ad.skinColor,
+        isDrinking: ad.isDrinking,
+        isSmoking: ad.isSmoking,
+        fatherProfession: ad.fatherProfession,
+        motherProfession: ad.motherProfession,
+        familyStatus: ad.familyStatus,
+        brothersCount: ad.brothersCount,
+        sistersCount: ad.sistersCount,
+        photosCount: ad.photosCount,
+        hasHoroscope: ad.hasHoroscope,
+        assets: ad.assets,
+        isBoosted: ad.isBoosted,
+        boostedAt: ad.boostedAt,
+        submittedAt: ad.submittedAt,
+        expiresAt: ad.expiresAt,
+        createdAt: ad.createdAt,
+        updatedAt: ad.updatedAt,
       },
     };
   }
